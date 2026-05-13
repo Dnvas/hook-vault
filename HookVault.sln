@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{295FF0E6-0DC1-4B9B-B4EC-50B7FF84FCF3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookVault", "src\HookVault\HookVault.csproj", "{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{F4B3C7D1-51CE-491A-8A57-83B7718F8B5D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookVault.Tests", "tests\HookVault.Tests\HookVault.Tests.csproj", "{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC} = {295FF0E6-0DC1-4B9B-B4EC-50B7FF84FCF3}
+		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4} = {F4B3C7D1-51CE-491A-8A57-83B7718F8B5D}
+	EndGlobalSection
+EndGlobal
