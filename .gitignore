@@ -39,3 +39,7 @@ coverage/
 
 # HookVault runtime config (user-supplied, not committed to the repo)
 hookvault.json
+
+# Local AI assistant configuration — kept out of the repo by design
+.claude/
+CLAUDE.local.md
