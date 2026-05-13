@@ -1,0 +1,41 @@
+# Build output
+bin/
+obj/
+out/
+
+# IDE / OS
+.vs/
+.vscode/
+*.user
+.DS_Store
+Thumbs.db
+
+# Rider
+.idea/
+
+# .NET secrets and local config
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+
+# SQLite databases (runtime data, not source)
+*.db
+*.db-shm
+*.db-wal
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Test results
+TestResults/
+coverage/
+*.coveragexml
+
+# Docker
+.env
+.env.*
+
+# HookVault runtime config (user-supplied, not committed to the repo)
+hookvault.json
