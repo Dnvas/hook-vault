@@ -17,17 +17,13 @@ public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRe
         "Authorization",
     };
 
-    public async Task ForwardAsync(WebhookEvent evt, CancellationToken ct = default)
+    internal async Task<ForwardResult> SendAsync(WebhookEvent evt, CancellationToken ct)
     {
-        evt.Status = EventStatus.Forwarding;
-        await repo.UpdateAsync(evt, ct);
-
         var client = httpClientFactory.CreateClient("forwarder");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, evt.ForwardUrl);
         request.Content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(evt.Body));
 
-        // Restore original headers (stored as JSON dict)
         var storedHeaders = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(evt.Headers)
             ?? [];
 
@@ -35,7 +31,6 @@ public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRe
         {
             if (SkippedHeaders.Contains(key)) continue;
 
-            // Content headers live on Content, not on the request itself in .NET
             if (key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
                 request.Content.Headers.TryAddWithoutValidation(key, value);
             else
@@ -48,30 +43,34 @@ public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRe
         try
         {
             using var response = await client.SendAsync(request, ct);
-            evt.ForwardedAt = DateTimeOffset.UtcNow;
-            evt.ForwardStatusCode = (int)response.StatusCode;
-            evt.Status = response.IsSuccessStatusCode ? EventStatus.Forwarded : EventStatus.ForwardFailed;
-
-            if (!response.IsSuccessStatusCode)
-                evt.ForwardError = $"Upstream returned {(int)response.StatusCode}";
-
-            logger.LogInformation("Forwarded event {Id} to {Url} → {Status}",
-                evt.Id, evt.ForwardUrl, (int)response.StatusCode);
+            var success = response.IsSuccessStatusCode;
+            var statusCode = (int)response.StatusCode;
+            logger.LogInformation("Forwarded event {Id} to {Url} → {Status}", evt.Id, evt.ForwardUrl, statusCode);
+            return new ForwardResult(success, statusCode, success ? null : $"Upstream returned {statusCode}");
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            evt.Status = EventStatus.ForwardFailed;
-            evt.ForwardError = "Request timed out";
-            evt.ForwardedAt = DateTimeOffset.UtcNow;
             logger.LogWarning("Forward timed out for event {Id}", evt.Id);
+            return new ForwardResult(false, null, "Request timed out");
         }
         catch (HttpRequestException ex)
         {
-            evt.Status = EventStatus.ForwardFailed;
-            evt.ForwardError = ex.Message;
-            evt.ForwardedAt = DateTimeOffset.UtcNow;
             logger.LogWarning(ex, "Forward failed for event {Id}", evt.Id);
+            return new ForwardResult(false, null, ex.Message);
         }
+    }
+
+    public async Task ForwardAsync(WebhookEvent evt, CancellationToken ct = default)
+    {
+        evt.Status = EventStatus.Forwarding;
+        await repo.UpdateAsync(evt, ct);
+
+        var result = await SendAsync(evt, ct);
+
+        evt.ForwardedAt = DateTimeOffset.UtcNow;
+        evt.ForwardStatusCode = result.StatusCode;
+        evt.Status = result.Success ? EventStatus.Forwarded : EventStatus.ForwardFailed;
+        evt.ForwardError = result.Success ? null : result.Error;
 
         await repo.UpdateAsync(evt, ct);
     }
