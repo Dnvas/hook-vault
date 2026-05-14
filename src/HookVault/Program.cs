@@ -44,6 +44,12 @@ builder.Services.AddScoped<EventForwarder>();
 // This is the .NET best-practice replacement for newing up HttpClient directly.
 builder.Services.AddHttpClient("forwarder");
 
+// Singleton: owns the Channel<Guid> for the application lifetime.
+builder.Services.AddSingleton<ReplayQueue>();
+
+// Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
+builder.Services.AddHostedService<ReplayWorker>();
+
 // --- ASP.NET Core ---
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
