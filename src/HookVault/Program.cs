@@ -2,10 +2,12 @@ using System.Text;
 using HookVault.Auth;
 using HookVault.Cli;
 using HookVault.Configuration;
+using HookVault.Contracts;
 using HookVault.Infrastructure;
 using HookVault.Middleware;
 using HookVault.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
@@ -87,7 +89,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // --- ASP.NET Core ---
-builder.Services.AddControllers();
+// InvalidModelStateResponseFactory maps automatic model-binding failures (e.g. a string
+// where an int is expected) to ApiError, so clients see one error shape instead of both
+// ApiError and the default ValidationProblemDetails.
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(opts =>
+    {
+        opts.InvalidModelStateResponseFactory = context =>
+        {
+            var first = context.ModelState
+                .Where(kv => kv.Value?.Errors.Count > 0)
+                .SelectMany(kv => kv.Value!.Errors.Select(e => (Field: kv.Key, e.ErrorMessage)))
+                .FirstOrDefault();
+
+            var message = string.IsNullOrEmpty(first.Field)
+                ? "Invalid request."
+                : $"Invalid value for '{first.Field}': {first.ErrorMessage}";
+
+            return new BadRequestObjectResult(new ApiError(message, "invalid_request"));
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
