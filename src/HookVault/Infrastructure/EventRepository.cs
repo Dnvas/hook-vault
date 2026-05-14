@@ -62,8 +62,12 @@ public sealed class EventRepository(HookVaultDbContext db)
     public Task<int> CountAsync(CancellationToken ct = default)
         => db.Events.CountAsync(ct);
 
-    public Task<DateTimeOffset?> OldestEventAtAsync(CancellationToken ct = default)
-        => db.Events.OrderBy(e => e.ReceivedAt).Select(e => (DateTimeOffset?)e.ReceivedAt).FirstOrDefaultAsync(ct);
+    public async Task<DateTimeOffset?> OldestEventAtAsync(CancellationToken ct = default)
+    {
+        if (!await db.Events.AnyAsync(ct)) return null;
+        var min = await db.Events.MinAsync(e => e.ReceivedAt, ct);
+        return min;
+    }
 
     public async Task<int> DeleteAsync(string? provider = null, CancellationToken ct = default)
     {

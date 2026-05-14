@@ -1,8 +1,13 @@
+using System.Text;
+using HookVault.Auth;
 using HookVault.Configuration;
 using HookVault.Infrastructure;
 using HookVault.Middleware;
 using HookVault.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +17,9 @@ var builder = WebApplication.CreateBuilder(args);
 var hookVaultOptions = HookVaultOptions.Load(
     LoggerFactory.Create(b => b.AddConsole()).CreateLogger("Startup"));
 builder.Services.AddSingleton(hookVaultOptions);
+
+var jwtOptions = JwtOptions.FromConfiguration(builder.Configuration);
+builder.Services.AddSingleton(jwtOptions);
 
 // --- Database ---
 // If DATABASE_URL is set, use PostgreSQL; otherwise default to SQLite.
@@ -34,7 +42,7 @@ else
 builder.Services.AddScoped<EventRepository>();
 
 // Transient: SignatureValidator is stateless; new instance each time is fine.
-builder.Services.AddTransient<SignatureValidator>();
+builder.Services.AddTransient<HookVaultSignatureValidator>();
 
 // Scoped: EventForwarder holds no state; Scoped is appropriate since it depends on
 // EventRepository (Scoped).
@@ -49,6 +57,28 @@ builder.Services.AddSingleton<ReplayQueue>();
 
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
+
+// --- Authentication / Authorisation ---
+// JwtBearer validates the Bearer token on every request. Controllers that don't
+// opt out via [AllowAnonymous] will require a valid token automatically once
+// UseAuthorization() is added to the pipeline below.
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opts =>
+    {
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // --- ASP.NET Core ---
 builder.Services.AddControllers();
@@ -78,6 +108,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// UseAuthentication reads the Bearer token and populates HttpContext.User.
+// UseAuthorization enforces [Authorize] / [AllowAnonymous] attributes.
+// Must come after routing-aware middleware and before MapControllers.
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.Run();
