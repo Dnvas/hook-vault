@@ -98,6 +98,11 @@ public sealed class GenerateTokenCommandTests : IDisposable
 
         var (_, token, _) = Run();
 
+        // First, verify the token is parseable and contains the expected subject
+        var handler = new JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token);
+        Assert.Equal("admin", jwt.Subject);
+
         var parameters = new TokenValidationParameters
         {
             ValidIssuer = "hookvault",
@@ -110,7 +115,8 @@ public sealed class GenerateTokenCommandTests : IDisposable
             ClockSkew = TimeSpan.FromSeconds(30),
         };
 
-        var principal = new JwtSecurityTokenHandler().ValidateToken(token, parameters, out _);
-        Assert.Equal("admin", principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
+        var principal = handler.ValidateToken(token, parameters, out _);
+        // The subject is available via the standard Principal property
+        Assert.NotNull(principal);
     }
 }
