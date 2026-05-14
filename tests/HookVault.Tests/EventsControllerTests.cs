@@ -7,6 +7,7 @@ using HookVault.Configuration;
 using HookVault.Contracts;
 using HookVault.Domain;
 using HookVault.Infrastructure;
+using HookVault.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -179,5 +180,122 @@ public sealed class EventsControllerTests : IAsyncLifetime
         var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.Equal("abc", doc.RootElement.GetProperty("headers").GetProperty("X-Test").GetString());
         Assert.True(doc.RootElement.GetProperty("validationDetails").GetProperty("isValid").GetBoolean());
+    }
+
+    private ReplayQueue Queue() => _factory.Services.GetRequiredService<ReplayQueue>();
+
+    private async Task<List<Guid>> DrainQueueAsync(int expected, int timeoutMs = 1000)
+    {
+        var queue = Queue();
+        var ids = new List<Guid>();
+        using var cts = new CancellationTokenSource(timeoutMs);
+        try
+        {
+            while (ids.Count < expected)
+            {
+                var id = await queue.Reader.ReadAsync(cts.Token);
+                ids.Add(id);
+            }
+        }
+        catch (OperationCanceledException) { }
+        return ids;
+    }
+
+    [Fact]
+    public async Task ReplaySingle_returns_404_when_event_missing()
+    {
+        var response = await AuthedClient().PostAsync($"/api/events/{Guid.NewGuid()}/replay", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReplaySingle_enqueues_event_and_returns_202()
+    {
+        var evt = NewEvent();
+        await SeedAsync(evt);
+
+        var response = await AuthedClient().PostAsync($"/api/events/{evt.Id}/replay", null);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ReplayEnqueuedResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(evt.Id, body.EventId);
+        Assert.Equal("Queued", body.Status);
+
+        var queued = await DrainQueueAsync(1);
+        Assert.Single(queued);
+        Assert.Equal(evt.Id, queued[0]);
+    }
+
+    [Fact]
+    public async Task ReplayBulk_returns_202_with_zero_when_nothing_to_replay()
+    {
+        var response = await AuthedClient().PostAsync("/api/events/replay-failed", null);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ReplayBulkResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(0, body.Enqueued);
+    }
+
+    [Fact]
+    public async Task ReplayBulk_enqueues_both_ForwardFailed_and_ReplayFailed_by_default()
+    {
+        await SeedAsync(
+            NewEvent(status: EventStatus.ForwardFailed),
+            NewEvent(status: EventStatus.ReplayFailed),
+            NewEvent(status: EventStatus.Forwarded));
+
+        var response = await AuthedClient().PostAsync("/api/events/replay-failed", null);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ReplayBulkResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Enqueued);
+
+        var queued = await DrainQueueAsync(2);
+        Assert.Equal(2, queued.Count);
+    }
+
+    [Fact]
+    public async Task ReplayBulk_filters_by_status_when_provided()
+    {
+        await SeedAsync(
+            NewEvent(status: EventStatus.ForwardFailed),
+            NewEvent(status: EventStatus.ReplayFailed));
+
+        var response = await AuthedClient().PostAsync("/api/events/replay-failed?status=ForwardFailed", null);
+
+        var body = await response.Content.ReadFromJsonAsync<ReplayBulkResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(1, body.Enqueued);
+        Assert.Equal("ForwardFailed", body.Status);
+    }
+
+    [Fact]
+    public async Task ReplayBulk_filters_by_provider_when_provided()
+    {
+        await SeedAsync(
+            NewEvent("stripe", EventStatus.ForwardFailed),
+            NewEvent("github", EventStatus.ForwardFailed));
+
+        var response = await AuthedClient().PostAsync("/api/events/replay-failed?provider=stripe", null);
+
+        var body = await response.Content.ReadFromJsonAsync<ReplayBulkResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(1, body.Enqueued);
+        Assert.Equal("stripe", body.Provider);
+    }
+
+    [Fact]
+    public async Task ReplayBulk_rejects_invalid_status_with_400()
+    {
+        var response = await AuthedClient().PostAsync("/api/events/replay-failed?status=Forwarded", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ApiError>();
+        Assert.NotNull(error);
+        Assert.Contains("ForwardFailed", error.Error);
     }
 }

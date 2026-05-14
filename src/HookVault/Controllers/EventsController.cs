@@ -2,6 +2,7 @@ using System.Text.Json;
 using HookVault.Contracts;
 using HookVault.Domain;
 using HookVault.Infrastructure;
+using HookVault.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +11,10 @@ namespace HookVault.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/events")]
-public sealed class EventsController(EventRepository repo) : ControllerBase
+public sealed class EventsController(
+    EventRepository repo,
+    ReplayQueue queue,
+    ILogger<EventsController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(
@@ -47,6 +51,52 @@ public sealed class EventsController(EventRepository repo) : ControllerBase
             return NotFound(new ApiError("Event not found.", "event_not_found"));
 
         return Ok(ToDetail(evt));
+    }
+
+    [HttpPost("{id:guid}/replay")]
+    public async Task<IActionResult> Replay(Guid id, CancellationToken ct)
+    {
+        var evt = await repo.GetByIdAsync(id, ct);
+        if (evt is null)
+            return NotFound(new ApiError("Event not found.", "event_not_found"));
+
+        await queue.EnqueueAsync(id, ct);
+        logger.LogInformation("Enqueued replay for event {EventId} (provider {Provider})", id, evt.Provider);
+
+        return Accepted(new ReplayEnqueuedResponse(id, "Queued"));
+    }
+
+    [HttpPost("replay-failed")]
+    public async Task<IActionResult> ReplayFailed(
+        [FromQuery] string? provider,
+        [FromQuery] string? status,
+        CancellationToken ct)
+    {
+        EventStatus? statusFilter = null;
+        if (!string.IsNullOrEmpty(status))
+        {
+            if (!Enum.TryParse<EventStatus>(status, ignoreCase: true, out var parsed)
+                || (parsed != EventStatus.ForwardFailed && parsed != EventStatus.ReplayFailed))
+            {
+                return BadRequest(new ApiError(
+                    "Invalid status. Must be ForwardFailed or ReplayFailed (case-insensitive).",
+                    "invalid_status"));
+            }
+            statusFilter = parsed;
+        }
+
+        var failed = await repo.GetFailedAsync(provider, ct);
+        if (statusFilter is { } s)
+            failed = failed.Where(e => e.Status == s).ToList();
+
+        foreach (var evt in failed)
+            await queue.EnqueueAsync(evt.Id, ct);
+
+        logger.LogInformation(
+            "Bulk replay enqueued {Count} events (provider={Provider}, status={Status})",
+            failed.Count, provider ?? "*", statusFilter?.ToString() ?? "*");
+
+        return Accepted(new ReplayBulkResponse(failed.Count, provider, statusFilter?.ToString()));
     }
 
     private static EventDetail ToDetail(WebhookEvent evt) => new(
