@@ -70,7 +70,7 @@ public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRe
         evt.ForwardedAt = DateTimeOffset.UtcNow;
         evt.ForwardStatusCode = result.StatusCode;
         evt.Status = result.Success ? EventStatus.Forwarded : EventStatus.ForwardFailed;
-        if (!result.Success) evt.ForwardError = result.Error;
+        evt.ForwardError = result.Success ? null : result.Error;
 
         await repo.UpdateAsync(evt, ct);
     }
