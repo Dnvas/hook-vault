@@ -50,6 +50,7 @@ public sealed class ReplayWorker(
             }
 
             evt.LastError = result.Error;
+            evt.ForwardStatusCode = result.StatusCode;
 
             if (attempt < RetryDelays.Length)
             {
@@ -60,7 +61,7 @@ public sealed class ReplayWorker(
         }
 
         evt.Status = EventStatus.ReplayFailed;
-        await repo.UpdateAsync(evt, ct);
+        await repo.UpdateAsync(evt, CancellationToken.None);
         logger.LogError("Replay exhausted all attempts for {Id}. Last error: {Error}",
             eventId, evt.LastError);
     }
