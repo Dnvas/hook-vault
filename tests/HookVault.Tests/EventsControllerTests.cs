@@ -298,4 +298,69 @@ public sealed class EventsControllerTests : IAsyncLifetime
         Assert.NotNull(error);
         Assert.Contains("ForwardFailed", error.Error);
     }
+
+    [Fact]
+    public async Task Delete_without_confirm_returns_400()
+    {
+        var response = await AuthedClient().DeleteAsync("/api/events");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ApiError>();
+        Assert.NotNull(error);
+        Assert.Contains("confirm", error.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Delete_with_confirm_removes_all_events()
+    {
+        await SeedAsync(NewEvent("stripe"), NewEvent("github"));
+
+        var response = await AuthedClient().DeleteAsync("/api/events?confirm=true");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DeleteResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Deleted);
+        Assert.Null(body.Provider);
+
+        var list = await AuthedClient().GetFromJsonAsync<ListEventsResponse>("/api/events");
+        Assert.NotNull(list);
+        Assert.Equal(0, list.Total);
+    }
+
+    [Fact]
+    public async Task Delete_with_provider_filter_only_removes_matching()
+    {
+        await SeedAsync(NewEvent("stripe"), NewEvent("github"));
+
+        var response = await AuthedClient().DeleteAsync("/api/events?confirm=true&provider=stripe");
+
+        var body = await response.Content.ReadFromJsonAsync<DeleteResponse>();
+        Assert.NotNull(body);
+        Assert.Equal(1, body.Deleted);
+        Assert.Equal("stripe", body.Provider);
+
+        var list = await AuthedClient().GetFromJsonAsync<ListEventsResponse>("/api/events");
+        Assert.NotNull(list);
+        Assert.Equal(1, list.Total);
+        Assert.Equal("github", list.Items[0].Provider);
+    }
+
+    [Fact]
+    public async Task Delete_confirm_is_case_insensitive()
+    {
+        await SeedAsync(NewEvent());
+
+        var response = await AuthedClient().DeleteAsync("/api/events?confirm=TRUE");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_without_token_returns_401()
+    {
+        var response = await _factory.CreateClient().DeleteAsync("/api/events?confirm=true");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }

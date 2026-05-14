@@ -99,6 +99,27 @@ public sealed class EventsController(
         return Accepted(new ReplayBulkResponse(failed.Count, provider, statusFilter?.ToString()));
     }
 
+    [HttpDelete]
+    public async Task<IActionResult> Purge(
+        [FromQuery] string? provider,
+        [FromQuery] string? confirm,
+        CancellationToken ct)
+    {
+        if (!string.Equals(confirm, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new ApiError(
+                "Pass ?confirm=true to delete events.",
+                "delete_confirm_required"));
+        }
+
+        var deleted = await repo.DeleteAsync(provider, ct);
+        logger.LogWarning(
+            "Deleted {Count} events (provider={Provider})",
+            deleted, provider ?? "*");
+
+        return Ok(new DeleteResponse(deleted, provider));
+    }
+
     private static EventDetail ToDetail(WebhookEvent evt) => new(
         evt.Id,
         evt.Provider,
