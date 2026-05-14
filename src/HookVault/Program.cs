@@ -1,8 +1,21 @@
+using System.Text;
+using HookVault.Auth;
+using HookVault.Cli;
 using HookVault.Configuration;
+using HookVault.Contracts;
 using HookVault.Infrastructure;
 using HookVault.Middleware;
 using HookVault.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
+
+if (args.Length > 0 && args[0] == "generate-token")
+{
+    return GenerateTokenCommand.Run(args[1..]);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +25,9 @@ var builder = WebApplication.CreateBuilder(args);
 var hookVaultOptions = HookVaultOptions.Load(
     LoggerFactory.Create(b => b.AddConsole()).CreateLogger("Startup"));
 builder.Services.AddSingleton(hookVaultOptions);
+
+var jwtOptions = JwtOptions.FromConfiguration(builder.Configuration);
+builder.Services.AddSingleton(jwtOptions);
 
 // --- Database ---
 // If DATABASE_URL is set, use PostgreSQL; otherwise default to SQLite.
@@ -34,7 +50,7 @@ else
 builder.Services.AddScoped<EventRepository>();
 
 // Transient: SignatureValidator is stateless; new instance each time is fine.
-builder.Services.AddTransient<SignatureValidator>();
+builder.Services.AddTransient<HookVaultSignatureValidator>();
 
 // Scoped: EventForwarder holds no state; Scoped is appropriate since it depends on
 // EventRepository (Scoped).
@@ -50,8 +66,49 @@ builder.Services.AddSingleton<ReplayQueue>();
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
 
+// --- Authentication / Authorisation ---
+// JwtBearer validates the Bearer token on every request. Controllers that don't
+// opt out via [AllowAnonymous] will require a valid token automatically once
+// UseAuthorization() is added to the pipeline below.
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opts =>
+    {
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 // --- ASP.NET Core ---
-builder.Services.AddControllers();
+// InvalidModelStateResponseFactory maps automatic model-binding failures (e.g. a string
+// where an int is expected) to ApiError, so clients see one error shape instead of both
+// ApiError and the default ValidationProblemDetails.
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(opts =>
+    {
+        opts.InvalidModelStateResponseFactory = context =>
+        {
+            var first = context.ModelState
+                .Where(kv => kv.Value?.Errors.Count > 0)
+                .SelectMany(kv => kv.Value!.Errors.Select(e => (Field: kv.Key, e.ErrorMessage)))
+                .FirstOrDefault();
+
+            var message = string.IsNullOrEmpty(first.Field)
+                ? "Invalid request."
+                : $"Invalid value for '{first.Field}': {first.ErrorMessage}";
+
+            return new BadRequestObjectResult(new ApiError(message, "invalid_request"));
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -79,8 +136,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// UseAuthentication reads the Bearer token and populates HttpContext.User.
+// UseAuthorization enforces [Authorize] / [AllowAnonymous] attributes.
+// Must come after routing-aware middleware and before MapControllers.
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 app.Run();
+return 0;
 
 // Partial class declaration makes Program accessible from xUnit test projects.
 public partial class Program { }

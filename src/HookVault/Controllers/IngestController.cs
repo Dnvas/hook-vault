@@ -4,10 +4,12 @@ using HookVault.Domain;
 using HookVault.Infrastructure;
 using HookVault.Middleware;
 using HookVault.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HookVault.Controllers;
 
+[AllowAnonymous]
 [ApiController]
 public class IngestController(
     HookVaultOptions options,

@@ -1,9 +1,11 @@
 using HookVault.Configuration;
 using HookVault.Infrastructure;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HookVault.Controllers;
 
+[AllowAnonymous]
 [ApiController]
 public class HealthController(
     HookVaultOptions options,

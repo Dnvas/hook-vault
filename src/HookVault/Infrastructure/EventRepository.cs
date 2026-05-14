@@ -1,3 +1,4 @@
+using HookVault.Contracts;
 using HookVault.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,6 +49,44 @@ public sealed class EventRepository(HookVaultDbContext db)
         return (items, total);
     }
 
+    public async Task<(List<EventSummary> Items, int Total)> ListSummariesAsync(
+        string? provider, string? status, DateTimeOffset? from, DateTimeOffset? to,
+        int limit = 50, int offset = 0, CancellationToken ct = default)
+    {
+        var query = db.Events.AsQueryable();
+
+        if (!string.IsNullOrEmpty(provider))
+            query = query.Where(e => e.Provider == provider);
+
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<EventStatus>(status, true, out var s))
+            query = query.Where(e => e.Status == s);
+
+        if (from.HasValue)
+            query = query.Where(e => e.ReceivedAt >= from.Value);
+
+        if (to.HasValue)
+            query = query.Where(e => e.ReceivedAt <= to.Value);
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(e => e.ReceivedAt)
+            .Skip(offset)
+            .Take(limit)
+            .Select(e => new EventSummary(
+                e.Id,
+                e.Provider,
+                e.Status.ToString(),
+                e.ReceivedAt,
+                e.SignatureValid,
+                e.ForwardStatusCode,
+                e.ReplayCount,
+                e.ForwardedAt))
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
     public Task<List<WebhookEvent>> GetFailedAsync(string? provider = null, CancellationToken ct = default)
     {
         var query = db.Events
@@ -62,8 +101,12 @@ public sealed class EventRepository(HookVaultDbContext db)
     public Task<int> CountAsync(CancellationToken ct = default)
         => db.Events.CountAsync(ct);
 
-    public Task<DateTimeOffset?> OldestEventAtAsync(CancellationToken ct = default)
-        => db.Events.OrderBy(e => e.ReceivedAt).Select(e => (DateTimeOffset?)e.ReceivedAt).FirstOrDefaultAsync(ct);
+    public async Task<DateTimeOffset?> OldestEventAtAsync(CancellationToken ct = default)
+    {
+        if (!await db.Events.AnyAsync(ct)) return null;
+        var min = await db.Events.MinAsync(e => e.ReceivedAt, ct);
+        return min;
+    }
 
     public async Task<int> DeleteAsync(string? provider = null, CancellationToken ct = default)
     {
