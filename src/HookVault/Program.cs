@@ -1,5 +1,6 @@
 using System.Text;
 using HookVault.Auth;
+using HookVault.Cli;
 using HookVault.Configuration;
 using HookVault.Infrastructure;
 using HookVault.Middleware;
@@ -8,6 +9,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
+
+if (args.Length > 0 && args[0] == "generate-token")
+{
+    return GenerateTokenCommand.Run(args[1..]);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -117,6 +123,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.Run();
+return 0;
 
 // Partial class declaration makes Program accessible from xUnit test projects.
 public partial class Program { }

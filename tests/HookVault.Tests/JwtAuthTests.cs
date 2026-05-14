@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HookVault.Tests;
 
+[Collection("EnvVarMutation")] // must run serially with GenerateTokenCommandTests due to env var mutations
 public sealed class JwtAuthTests : IAsyncLifetime
 {
     private HookVaultWebApplicationFactory _factory = null!;
