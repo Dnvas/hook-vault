@@ -25,7 +25,8 @@ public class IngestController(
 
         if (config is null)
         {
-            logger.LogWarning("Ingest request for unknown provider path '{Provider}'", provider);
+            logger.LogWarning("Ingest request for unknown provider path '{Provider}'",
+                provider.Replace('\n', '_').Replace('\r', '_'));
             return NotFound(new { error = $"No provider configured for path '{provider}'." });
         }
 

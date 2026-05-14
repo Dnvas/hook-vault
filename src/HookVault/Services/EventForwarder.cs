@@ -52,7 +52,14 @@ public class EventForwarder(IHttpClientFactory httpClientFactory, EventRepositor
             logger.LogInformation("Forwarded event {Id} to {Url} → {Status}",
                 evt.Id, evt.ForwardUrl, (int)response.StatusCode);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            evt.Status = EventStatus.ForwardFailed;
+            evt.ForwardError = "Request timed out";
+            evt.ForwardedAt = DateTimeOffset.UtcNow;
+            logger.LogWarning("Forward timed out for event {Id}", evt.Id);
+        }
+        catch (HttpRequestException ex)
         {
             evt.Status = EventStatus.ForwardFailed;
             evt.ForwardError = ex.Message;

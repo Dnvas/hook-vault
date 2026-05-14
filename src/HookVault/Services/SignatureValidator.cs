@@ -7,7 +7,7 @@ namespace HookVault.Services;
 
 // Completely generic HMAC validator. No provider-specific logic lives here —
 // all behaviour comes from the caller's ValidationConfig.
-public class SignatureValidator(ILogger<SignatureValidator> logger)
+public class SignatureValidator
 {
     public SignatureValidationResult Validate(
         ValidationConfig config,
@@ -18,10 +18,9 @@ public class SignatureValidator(ILogger<SignatureValidator> logger)
         {
             return ValidateCore(config, rawBody, headers);
         }
-        catch (Exception ex)
+        catch (NotSupportedException ex)
         {
-            logger.LogWarning(ex, "Signature validation threw an unexpected exception");
-            return SignatureValidationResult.Fail($"Unexpected error: {ex.Message}");
+            return SignatureValidationResult.Fail(ex.Message);
         }
     }
 
@@ -49,7 +48,7 @@ public class SignatureValidator(ILogger<SignatureValidator> logger)
         if (receivedSignature is null)
             return SignatureValidationResult.Fail(
                 $"Could not extract signature from header value '{headerRaw}' " +
-                $"using pattern '{config.SignaturePattern ?? "(entire header)"}'.");
+                $"using pattern '{config.SignaturePattern}'.");
 
         var extractedTimestamp = config.TimestampPattern is not null
             ? ExtractToken(headerRaw, config.TimestampPattern, "timestamp")
@@ -121,19 +120,16 @@ public class SignatureValidator(ILogger<SignatureValidator> logger)
         var prefix = pattern[..prefixIndex];
         var suffix = pattern[(prefixIndex + placeholder.Length)..];
 
-        foreach (var segment in headerValue.Split(','))
-        {
-            var trimmed = segment.Trim();
-            if (!trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var remaining = trimmed[prefix.Length..];
-            if (!string.IsNullOrEmpty(suffix) && remaining.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                remaining = remaining[..^suffix.Length];
-
-            return remaining;
-        }
-
-        return null;
+        return headerValue.Split(',')
+            .Select(s => s.Trim())
+            .Where(t => t.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(t =>
+            {
+                var remaining = t[prefix.Length..];
+                return !string.IsNullOrEmpty(suffix) && remaining.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                    ? remaining[..^suffix.Length]
+                    : remaining;
+            })
+            .FirstOrDefault();
     }
 }
