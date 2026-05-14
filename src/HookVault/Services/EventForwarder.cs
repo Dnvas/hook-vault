@@ -3,12 +3,18 @@ using HookVault.Infrastructure;
 
 namespace HookVault.Services;
 
-public class EventForwarder(IHttpClientFactory httpClientFactory, EventRepository repo, ILogger<EventForwarder> logger)
+public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRepository repo, ILogger<EventForwarder> logger)
 {
-    // Headers we never forward — they describe the original connection, not the payload.
+    // Hop-by-hop headers (RFC 9110 §7.6.1) and Authorization must not be forwarded.
+    // Hop-by-hop headers describe the original transport connection, not the payload.
+    // Authorization is omitted so the captured token from the provider cannot be
+    // replayed against the local destination without explicit opt-in.
     private static readonly HashSet<string> SkippedHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
         "Host", "Content-Length", "Transfer-Encoding",
+        "Connection", "Keep-Alive", "TE", "Trailer", "Upgrade",
+        "Proxy-Authorization", "Proxy-Authenticate",
+        "Authorization",
     };
 
     public async Task ForwardAsync(WebhookEvent evt, CancellationToken ct = default)

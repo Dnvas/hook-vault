@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HookVault.Domain;
 
-public class WebhookEvent
+public sealed class WebhookEvent
 {
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();

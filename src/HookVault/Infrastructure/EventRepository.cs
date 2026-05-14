@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HookVault.Infrastructure;
 
-public class EventRepository(HookVaultDbContext db)
+public sealed class EventRepository(HookVaultDbContext db)
 {
     public async Task AddAsync(WebhookEvent evt, CancellationToken ct = default)
     {
@@ -71,9 +71,6 @@ public class EventRepository(HookVaultDbContext db)
         if (!string.IsNullOrEmpty(provider))
             query = query.Where(e => e.Provider == provider);
 
-        var items = await query.ToListAsync(ct);
-        db.Events.RemoveRange(items);
-        await db.SaveChangesAsync(ct);
-        return items.Count;
+        return await query.ExecuteDeleteAsync(ct);
     }
 }

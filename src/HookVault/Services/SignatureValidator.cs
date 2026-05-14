@@ -7,7 +7,7 @@ namespace HookVault.Services;
 
 // Completely generic HMAC validator. No provider-specific logic lives here —
 // all behaviour comes from the caller's ValidationConfig.
-public class SignatureValidator
+public sealed class SignatureValidator
 {
     public SignatureValidationResult Validate(
         ValidationConfig config,

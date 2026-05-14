@@ -5,7 +5,7 @@ namespace HookVault.Middleware;
 // into a byte array and stashes it in HttpContext.Items before controllers run.
 // We also replace Request.Body with a rewindable MemoryStream so the model
 // binder can read the body a second time.
-public class RawBodyMiddleware(RequestDelegate next)
+public sealed class RawBodyMiddleware(RequestDelegate next)
 {
     public const string RawBodyKey = "RawBody";
 

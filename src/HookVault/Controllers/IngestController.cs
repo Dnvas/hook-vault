@@ -70,9 +70,8 @@ public class IngestController(
         await repo.AddAsync(evt, ct);
         logger.LogInformation("Captured event {Id} for provider '{Provider}'", evt.Id, config.Name);
 
-        // --- Forward (fire and update, non-blocking to caller) ---
-        // We still await it here so the caller gets a response after the forward attempt.
-        // The forwarder updates the event's status internally.
+        // Forward synchronously so the response reflects the current forward status.
+        // The forwarder writes the result back onto the event record.
         await forwarder.ForwardAsync(evt, ct);
 
         return Accepted(new
