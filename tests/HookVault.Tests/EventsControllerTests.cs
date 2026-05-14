@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HookVault.Tests;
 
+[Collection("EnvVarMutation")]
 public sealed class EventsControllerTests : IAsyncLifetime
 {
     private HookVaultWebApplicationFactory _baseFactory = null!;

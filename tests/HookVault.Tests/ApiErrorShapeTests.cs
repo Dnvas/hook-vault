@@ -6,6 +6,7 @@ using HookVault.Contracts;
 
 namespace HookVault.Tests;
 
+[Collection("EnvVarMutation")]
 public sealed class ApiErrorShapeTests : IAsyncLifetime
 {
     private HookVaultWebApplicationFactory _factory = null!;
