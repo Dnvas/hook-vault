@@ -26,8 +26,8 @@ public sealed class GenerateTokenCommandTests : IDisposable
 
     private static (int ExitCode, string Stdout, string Stderr) Run(params string[] args)
     {
-        var stdout = new StringWriter();
-        var stderr = new StringWriter();
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
         var code = GenerateTokenCommand.Run(args, stdout, stderr);
         return (code, stdout.ToString().Trim(), stderr.ToString().Trim());
     }

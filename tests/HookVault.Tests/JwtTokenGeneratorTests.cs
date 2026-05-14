@@ -30,7 +30,7 @@ public sealed class JwtTokenGeneratorTests
             ClockSkew = TimeSpan.FromSeconds(30),
         };
 
-        var principal = handler.ValidateToken(token, parameters, out _);
+        handler.ValidateToken(token, parameters, out _);
 
         Assert.Equal("admin", jwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.Sub).Value);
         Assert.Equal("hookvault", jwt.Issuer);
