@@ -106,6 +106,10 @@ public sealed class EventsController(
         Response.Headers.Append("Cache-Control", "no-cache");
         Response.Headers.Append("X-Accel-Buffering", "no");
 
+        // Commit headers immediately so the client (including TestServer) sees the 200
+        // before any data events arrive — otherwise headers only flush on first write.
+        await Response.StartAsync(ct);
+
         await foreach (var notification in notifier.Reader.ReadAllAsync(ct))
         {
             var data = System.Text.Json.JsonSerializer.Serialize(notification,
