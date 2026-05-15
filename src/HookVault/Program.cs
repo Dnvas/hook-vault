@@ -148,6 +148,22 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
     await BackfillMigrationHistoryAsync(db);
     await db.Database.MigrateAsync();
+
+    // Recover from a crash mid-replay: any row stuck at Replaying gets bumped
+    // to ForwardFailed so it's eligible for the bulk replay-failed endpoint.
+    var orphaned = await db.Events
+        .Where(e => e.Status == HookVault.Domain.EventStatus.Replaying)
+        .ToListAsync();
+    if (orphaned.Count > 0)
+    {
+        foreach (var evt in orphaned)
+        {
+            evt.Status = HookVault.Domain.EventStatus.ForwardFailed;
+            evt.LastError ??= "Recovered from interrupted replay attempt.";
+        }
+        await db.SaveChangesAsync();
+        app.Logger.LogWarning("Startup sweep: recovered {Count} orphaned Replaying events.", orphaned.Count);
+    }
 }
 
 static async Task BackfillMigrationHistoryAsync(HookVaultDbContext db)
