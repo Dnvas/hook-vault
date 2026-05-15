@@ -366,4 +366,32 @@ public class SignatureValidatorTests
 
         Assert.True(result.IsValid);
     }
+
+    // ------------------------------------------------------------------ unknown encoding → error
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("raw")]
+    [InlineData("plaintext")]
+    public void Unknown_signatureEncoding_returns_error(string encoding)
+    {
+        const string secret = "s";
+        const string body = "test";
+        Environment.SetEnvironmentVariable("TEST_UNKNOWN_ENC_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha256",
+            SecretEnvVar = "TEST_UNKNOWN_ENC_SECRET",
+            SignatureHeader = "X-Sig",
+            PayloadFormat = "{body}",
+            SignatureEncoding = encoding,
+        };
+
+        var headers = MakeHeaders(("X-Sig", "anything"));
+        var result = BuildValidator().Validate(config, Utf8(body), headers);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("Unsupported signatureEncoding", result.Error);
+    }
 }

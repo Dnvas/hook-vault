@@ -82,7 +82,9 @@ public sealed class SignatureValidator
             "base64"    => Convert.ToBase64String(computedBytes),
             "base64url" => Convert.ToBase64String(computedBytes)
                                .Replace('+', '-').Replace('/', '_').TrimEnd('='),
-            _           => Convert.ToHexString(computedBytes).ToLowerInvariant(),
+            "hex" or null => Convert.ToHexString(computedBytes).ToLowerInvariant(),
+            var unknown   => throw new NotSupportedException(
+                                 $"Unsupported signatureEncoding '{config.SignatureEncoding}'."),
         };
 
         // hex is case-insensitive — normalize both sides before compare
