@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { getToken, setToken } from './api/client'
 import { TokenGate } from './components/TokenGate'
+import { EventList } from './components/EventList'
 
 const queryClient = new QueryClient()
 
@@ -21,18 +22,30 @@ function Inner() {
     return !!getToken()
   })
 
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [providerFilter, setProviderFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+
   if (!hasToken) {
     return <TokenGate onToken={() => setHasToken(true)} />
   }
 
-  // Split pane placeholder — replaced in Task 10
   return (
     <div className="h-screen bg-slate-900 flex overflow-hidden">
-      <div className="w-72 shrink-0 border-r border-slate-700/60 flex items-center justify-center">
-        <span className="text-slate-600 text-xs font-mono">event list — coming soon</span>
+      <div className="w-72 shrink-0 border-r border-slate-700/60 flex flex-col">
+        <EventList
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          providerFilter={providerFilter}
+          statusFilter={statusFilter}
+          onProviderFilter={setProviderFilter}
+          onStatusFilter={setStatusFilter}
+        />
       </div>
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-slate-600 text-xs font-mono">event detail — coming soon</span>
+      <div className="flex-1 overflow-hidden flex items-center justify-center">
+        <p className="text-slate-600 text-sm font-mono">
+          {selectedId ? `Selected: ${selectedId}` : 'Select an event to inspect'}
+        </p>
       </div>
     </div>
   )
