@@ -229,6 +229,7 @@ static async Task<bool> TableExistsAsync(System.Data.Common.DbConnection conn, s
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseMiddleware<RawBodyMiddleware>();
+app.UseMiddleware<MaxBodySizeMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
