@@ -51,6 +51,10 @@ else
 // Scoped: EventRepository wraps the Scoped DbContext — must also be Scoped.
 builder.Services.AddScoped<EventRepository>();
 
+// Transient: each scheme is stateless; new instance each time is fine.
+builder.Services.AddTransient<HookVault.Services.Schemes.IIngestSignatureScheme,
+                              HookVault.Services.Schemes.SingleHeaderHmacScheme>();
+
 // Transient: SignatureValidator is stateless; new instance each time is fine.
 builder.Services.AddTransient<HookVaultSignatureValidator>();
 

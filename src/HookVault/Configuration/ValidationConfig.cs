@@ -24,4 +24,7 @@ public sealed class ValidationConfig
 
     [JsonPropertyName("signatureEncoding")]
     public string? SignatureEncoding { get; init; }
+
+    [JsonPropertyName("scheme")]
+    public string? Scheme { get; init; }
 }
