@@ -79,11 +79,11 @@ public sealed class SignatureValidator
 
         var computed = config.SignatureEncoding?.ToLowerInvariant() switch
         {
-            "base64"    => Convert.ToBase64String(computedBytes),
+            "base64" => Convert.ToBase64String(computedBytes),
             "base64url" => Convert.ToBase64String(computedBytes)
                                .Replace('+', '-').Replace('/', '_').TrimEnd('='),
             "hex" or null => Convert.ToHexString(computedBytes).ToLowerInvariant(),
-            _             => throw new NotSupportedException(
+            _ => throw new NotSupportedException(
                                  $"Unsupported signatureEncoding '{config.SignatureEncoding}'."),
         };
 
