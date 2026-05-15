@@ -36,11 +36,13 @@ public class IngestController(
         }
 
         var rawBody = HttpContext.Items[RawBodyMiddleware.RawBodyKey] as byte[] ?? [];
-        var bodyText = System.Text.Encoding.UTF8.GetString(rawBody);
 
-        // Capture headers as a flat JSON dict (take first value per header)
+        // Headers stored as Dictionary<string, string[]> so multi-value headers
+        // (Set-Cookie, repeated Forwarded, etc.) round-trip without lossy comma-join.
         var headersDict = Request.Headers
-            .ToDictionary(h => h.Key, h => h.Value.ToString());
+            .ToDictionary(
+                h => h.Key,
+                h => h.Value.Where(v => v is not null).Select(v => v!).ToArray());
         var headersJson = JsonSerializer.Serialize(headersDict);
 
         // --- Signature Validation ---
@@ -65,7 +67,7 @@ public class IngestController(
             Provider = config.Name,
             Path = $"/api/ingest/{provider}",
             Headers = headersJson,
-            Body = bodyText,
+            Body = rawBody,
             SignatureHeader = config.Validation?.SignatureHeader,
             SignatureValid = signatureValid,
             ValidationDetails = validationDetails,
