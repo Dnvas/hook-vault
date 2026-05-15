@@ -19,12 +19,14 @@ public class IngestController(
     EventNotifier notifier,
     ILogger<IngestController> logger) : ControllerBase
 {
-    [HttpPost("api/ingest/{provider}")]
+    [HttpPost("api/ingest/{**provider}")]
     public async Task<IActionResult> Ingest(string provider, CancellationToken ct)
     {
-        // Resolve provider by path segment (e.g. "stripe" matches path "/stripe")
+        // Normalise both sides: strip leading slash from configured path,
+        // compare against the catch-all `provider` segment (which has no leading slash).
+        var normalisedRequest = provider.TrimStart('/');
         var config = options.Providers.FirstOrDefault(p =>
-            p.Path.TrimStart('/').Equals(provider, StringComparison.OrdinalIgnoreCase));
+            p.Path.TrimStart('/').Equals(normalisedRequest, StringComparison.OrdinalIgnoreCase));
 
         if (config is null)
         {
