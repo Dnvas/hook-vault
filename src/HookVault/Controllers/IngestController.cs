@@ -49,7 +49,8 @@ public class IngestController(
         {
             var result = validator.Validate(config.Validation, rawBody, Request.Headers);
             signatureValid = result.IsValid;
-            validationDetails = JsonSerializer.Serialize(result);
+            validationDetails = JsonSerializer.Serialize(result,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
             if (!result.IsValid)
                 logger.LogWarning("Signature validation failed for provider '{Provider}': {Error}",
