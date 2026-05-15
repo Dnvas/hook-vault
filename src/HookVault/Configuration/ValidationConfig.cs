@@ -21,4 +21,7 @@ public sealed class ValidationConfig
 
     [JsonPropertyName("timestampPattern")]
     public string? TimestampPattern { get; init; }
+
+    [JsonPropertyName("signatureEncoding")]
+    public string? SignatureEncoding { get; init; }
 }
