@@ -63,6 +63,9 @@ builder.Services.AddHttpClient("forwarder");
 // Singleton: owns the Channel<Guid> for the application lifetime.
 builder.Services.AddSingleton<ReplayQueue>();
 
+// Singleton: owns the Channel<EventNotification> for SSE fanout to connected clients.
+builder.Services.AddSingleton<EventNotifier>();
+
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
 
