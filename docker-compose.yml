@@ -1,0 +1,20 @@
+services:
+  hookvault:
+    build: .
+    ports:
+      - "7777:8080"
+    environment:
+      # Generate a secret: openssl rand -hex 32
+      # Mint a token:      docker compose run --rm hookvault generate-token
+      HOOKVAULT_JWT_SECRET: ${HOOKVAULT_JWT_SECRET:?Set HOOKVAULT_JWT_SECRET in a .env file}
+      HOOKVAULT_JWT_ISSUER: ${HOOKVAULT_JWT_ISSUER:-hookvault}
+      HOOKVAULT_JWT_AUDIENCE: ${HOOKVAULT_JWT_AUDIENCE:-hookvault}
+      # Uncomment to enable Swagger UI at /swagger
+      # ASPNETCORE_ENVIRONMENT: Development
+    volumes:
+      - ./hookvault.json:/app/config/hookvault.json:ro
+      - hookvault-data:/data
+    restart: unless-stopped
+
+volumes:
+  hookvault-data:
