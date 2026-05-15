@@ -1,0 +1,51 @@
+// Copy this file to hookvault.json in your project root and customise.
+// Mount into the container: -v ./hookvault.json:/app/config/hookvault.json
+//
+// Provider-specific configs with detailed comments: see examples/
+//
+// Quick start:
+//   1. Copy to hookvault.json and set your forwardUrl and secretEnvVar values.
+//   2. Create a .env file alongside docker-compose.yml containing:
+//        HOOKVAULT_JWT_SECRET=$(openssl rand -hex 32)
+//        STRIPE_WEBHOOK_SECRET=<your Stripe signing secret>
+//      (add one line per secretEnvVar you configured above)
+//   3. docker compose up
+{
+  "providers": [
+    {
+      // Unique label — appears in event listings and log output.
+      "name": "stripe",
+      // Ingest path: HookVault registers POST /api/ingest/stripe.
+      // Point your Stripe dashboard webhook URL at http://localhost:7777/api/ingest/stripe.
+      "path": "/stripe",
+      // Where to forward the event in your local dev stack.
+      // host.docker.internal resolves to the Docker host machine.
+      "forwardUrl": "http://host.docker.internal:3000/webhooks/stripe",
+      "validation": {
+        // "hmac-sha256" or "hmac-sha512"
+        "algorithm": "hmac-sha256",
+        // Name of the env var holding your webhook secret — never the value itself.
+        "secretEnvVar": "STRIPE_WEBHOOK_SECRET",
+        // Header containing the provider's signature.
+        "signatureHeader": "Stripe-Signature",
+        // How the signed payload is constructed from {body} and optional {timestamp}.
+        "payloadFormat": "{timestamp}.{body}",
+        // How the digest is encoded: "hex" (default) | "base64" | "base64url"
+        "signatureEncoding": "hex",
+        // Pattern to extract the digest. "v1={signature}" matches "t=123,v1=abc" → "abc".
+        "signaturePattern": "v1={signature}",
+        // Pattern to extract the timestamp from the same header.
+        "timestampPattern": "t={timestamp}"
+      }
+    },
+    {
+      // Set validation to null to capture and forward without verifying signatures.
+      // Useful for providers whose signing scheme can't be expressed in config
+      // (e.g. Resend/Svix, which uses three separate headers).
+      "name": "resend",
+      "path": "/resend",
+      "forwardUrl": "http://host.docker.internal:3000/webhooks/resend",
+      "validation": null
+    }
+  ]
+}
