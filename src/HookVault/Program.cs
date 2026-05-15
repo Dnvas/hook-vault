@@ -130,6 +130,11 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Log a ready-to-use UI URL with a 30-day token so developers can click straight in.
+var uiToken = JwtTokenGenerator.Mint(jwtOptions, "ui", TimeSpan.FromDays(30));
+app.Logger.LogInformation(
+    "HookVault UI → http://localhost:7777/?token={Token}", uiToken);
+
 // --- Auto-migrate DB on startup ---
 // EnsureCreated / Migrate creates tables from EF model without needing CLI migrations.
 // Fine for SQLite dev/prod; for PostgreSQL prod you'd want explicit migrations.
@@ -141,6 +146,8 @@ using (var scope = app.Services.CreateScope())
 
 // --- Middleware pipeline ---
 // Order matters in ASP.NET Core middleware — think Django MIDDLEWARE list.
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseMiddleware<RawBodyMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -156,6 +163,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 app.Run();
 return 0;
 
