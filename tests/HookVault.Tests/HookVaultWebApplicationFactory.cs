@@ -39,6 +39,12 @@ public sealed class HookVaultWebApplicationFactory : WebApplicationFactory<Progr
 
     public SqliteConnection Connection => _connection;
 
+    public string GenerateToken(string subject = "test") =>
+        Auth.JwtTokenGenerator.Mint(
+            new Auth.JwtOptions(TestSecret, TestIssuer, TestAudience),
+            subject,
+            TimeSpan.FromHours(1));
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Test");

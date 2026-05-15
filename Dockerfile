@@ -1,3 +1,11 @@
+# Stage 0: build React UI
+FROM node:20-alpine AS ui-build
+WORKDIR /ui
+COPY ui/package*.json ./
+RUN npm ci
+COPY ui/ ./
+RUN npm run build
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 WORKDIR /src
 
@@ -6,6 +14,8 @@ COPY src/HookVault/HookVault.csproj src/HookVault/
 RUN dotnet restore src/HookVault/HookVault.csproj
 
 COPY . .
+# Copy built React UI into wwwroot so dotnet publish includes it
+COPY --from=ui-build /ui/dist ./src/HookVault/wwwroot/
 RUN dotnet publish src/HookVault/HookVault.csproj \
     --configuration Release \
     --no-restore \

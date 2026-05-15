@@ -99,6 +99,29 @@ public sealed class EventsController(
         return Accepted(new ReplayBulkResponse(failed.Count, provider, statusFilter?.ToString()));
     }
 
+    [HttpGet("stream")]
+    public async Task Stream([FromServices] EventNotifier notifier, CancellationToken ct)
+    {
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("X-Accel-Buffering", "no");
+
+        // Commit headers immediately so the client (including TestServer) sees the 200
+        // before any data events arrive — otherwise headers only flush on first write.
+        await Response.StartAsync(ct);
+
+        await foreach (var notification in notifier.Reader.ReadAllAsync(ct))
+        {
+            var data = System.Text.Json.JsonSerializer.Serialize(notification,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                });
+            await Response.WriteAsync($"data: {data}\n\n", ct);
+            await Response.Body.FlushAsync(ct);
+        }
+    }
+
     [HttpDelete]
     public async Task<IActionResult> Purge(
         [FromQuery] string? provider,

@@ -16,6 +16,7 @@ public class IngestController(
     SignatureValidator validator,
     EventRepository repo,
     EventForwarder forwarder,
+    EventNotifier notifier,
     ILogger<IngestController> logger) : ControllerBase
 {
     [HttpPost("api/ingest/{provider}")]
@@ -48,7 +49,8 @@ public class IngestController(
         {
             var result = validator.Validate(config.Validation, rawBody, Request.Headers);
             signatureValid = result.IsValid;
-            validationDetails = JsonSerializer.Serialize(result);
+            validationDetails = JsonSerializer.Serialize(result,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
             if (!result.IsValid)
                 logger.LogWarning("Signature validation failed for provider '{Provider}': {Error}",
@@ -71,6 +73,7 @@ public class IngestController(
 
         await repo.AddAsync(evt, ct);
         logger.LogInformation("Captured event {Id} for provider '{Provider}'", evt.Id, config.Name);
+        notifier.Notify(new EventNotification(evt.Id, config.Name, evt.Status.ToString()));
 
         // Forward synchronously so the response reflects the current forward status.
         // The forwarder writes the result back onto the event record.
