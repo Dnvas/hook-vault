@@ -83,7 +83,7 @@ public sealed class SignatureValidator
             "base64url" => Convert.ToBase64String(computedBytes)
                                .Replace('+', '-').Replace('/', '_').TrimEnd('='),
             "hex" or null => Convert.ToHexString(computedBytes).ToLowerInvariant(),
-            var unknown   => throw new NotSupportedException(
+            _             => throw new NotSupportedException(
                                  $"Unsupported signatureEncoding '{config.SignatureEncoding}'."),
         };
 
