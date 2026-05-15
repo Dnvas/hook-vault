@@ -19,6 +19,12 @@ public class IngestController(
     EventNotifier notifier,
     ILogger<IngestController> logger) : ControllerBase
 {
+    private static readonly HashSet<string> SensitiveHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Authorization",
+        "Cookie",
+        "Proxy-Authorization",
+    };
     [HttpPost("api/ingest/{**provider}")]
     public async Task<IActionResult> Ingest(string provider, CancellationToken ct)
     {
@@ -37,12 +43,17 @@ public class IngestController(
 
         var rawBody = HttpContext.Items[RawBodyMiddleware.RawBodyKey] as byte[] ?? [];
 
-        // Headers stored as Dictionary<string, string[]> so multi-value headers
-        // (Set-Cookie, repeated Forwarded, etc.) round-trip without lossy comma-join.
+        // Strip sensitive header values before persistence. The forwarder still
+        // uses the live Request headers on the ingest path; replays from the DB
+        // will see [redacted] in place, which means the local upstream won't
+        // receive provider-issued bearer tokens on replay — that's the safer
+        // default for a dev tool.
         var headersDict = Request.Headers
             .ToDictionary(
                 h => h.Key,
-                h => h.Value.Where(v => v is not null).Select(v => v!).ToArray());
+                h => SensitiveHeaders.Contains(h.Key)
+                    ? new[] { "[redacted]" }
+                    : h.Value.Where(v => v is not null).Select(v => v!).ToArray());
         var headersJson = JsonSerializer.Serialize(headersDict);
 
         // --- Signature Validation ---
