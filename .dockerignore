@@ -1,0 +1,13 @@
+bin/
+obj/
+out/
+TestResults/
+*.db
+*.db-shm
+*.db-wal
+.git/
+.github/
+.claude/
+hookvault.json
+.env
+.env.*
