@@ -22,19 +22,20 @@ public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRe
         var client = httpClientFactory.CreateClient("forwarder");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, evt.ForwardUrl);
-        request.Content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(evt.Body));
+        request.Content = new ByteArrayContent(evt.Body);
 
-        var storedHeaders = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(evt.Headers)
+        var storedHeaders =
+            System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(evt.Headers)
             ?? [];
 
-        foreach (var (key, value) in storedHeaders)
+        foreach (var (key, values) in storedHeaders)
         {
             if (SkippedHeaders.Contains(key)) continue;
 
             if (key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
-                request.Content.Headers.TryAddWithoutValidation(key, value);
+                request.Content.Headers.TryAddWithoutValidation(key, values);
             else
-                request.Headers.TryAddWithoutValidation(key, value);
+                request.Headers.TryAddWithoutValidation(key, values);
         }
 
         request.Headers.TryAddWithoutValidation("X-HookVault-Event-Id", evt.Id.ToString());

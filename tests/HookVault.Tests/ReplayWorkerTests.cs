@@ -66,7 +66,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         Provider = "test",
         Path = "/test",
         Headers = "{}",
-        Body = "hello",
+        Body = System.Text.Encoding.UTF8.GetBytes("hello"),
         ForwardUrl = "http://localhost/webhook",
         Status = EventStatus.ForwardFailed,
     };

@@ -19,12 +19,14 @@ public class IngestController(
     EventNotifier notifier,
     ILogger<IngestController> logger) : ControllerBase
 {
-    [HttpPost("api/ingest/{provider}")]
+    [HttpPost("api/ingest/{**provider}")]
     public async Task<IActionResult> Ingest(string provider, CancellationToken ct)
     {
-        // Resolve provider by path segment (e.g. "stripe" matches path "/stripe")
+        // Normalise both sides: strip leading slash from configured path,
+        // compare against the catch-all `provider` segment (which has no leading slash).
+        var normalisedRequest = provider.TrimStart('/');
         var config = options.Providers.FirstOrDefault(p =>
-            p.Path.TrimStart('/').Equals(provider, StringComparison.OrdinalIgnoreCase));
+            p.Path.TrimStart('/').Equals(normalisedRequest, StringComparison.OrdinalIgnoreCase));
 
         if (config is null)
         {
@@ -34,11 +36,13 @@ public class IngestController(
         }
 
         var rawBody = HttpContext.Items[RawBodyMiddleware.RawBodyKey] as byte[] ?? [];
-        var bodyText = System.Text.Encoding.UTF8.GetString(rawBody);
 
-        // Capture headers as a flat JSON dict (take first value per header)
+        // Headers stored as Dictionary<string, string[]> so multi-value headers
+        // (Set-Cookie, repeated Forwarded, etc.) round-trip without lossy comma-join.
         var headersDict = Request.Headers
-            .ToDictionary(h => h.Key, h => h.Value.ToString());
+            .ToDictionary(
+                h => h.Key,
+                h => h.Value.Where(v => v is not null).Select(v => v!).ToArray());
         var headersJson = JsonSerializer.Serialize(headersDict);
 
         // --- Signature Validation ---
@@ -63,7 +67,7 @@ public class IngestController(
             Provider = config.Name,
             Path = $"/api/ingest/{provider}",
             Headers = headersJson,
-            Body = bodyText,
+            Body = rawBody,
             SignatureHeader = config.Validation?.SignatureHeader,
             SignatureValid = signatureValid,
             ValidationDetails = validationDetails,

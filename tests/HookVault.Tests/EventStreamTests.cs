@@ -58,28 +58,36 @@ public sealed class EventStreamTests : IAsyncLifetime
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-        var notificationTask = Task.Run(async () =>
+        var subscription = notifier.Subscribe();
+        try
         {
-            await foreach (var n in notifier.Reader.ReadAllAsync(cts.Token))
-                return n;
-            return null;
-        }, cts.Token);
+            var notificationTask = Task.Run(async () =>
+            {
+                await foreach (var n in subscription.Reader.ReadAllAsync(cts.Token))
+                    return n;
+                return null;
+            }, cts.Token);
 
-        await Task.Delay(100, cts.Token);
+            await Task.Delay(100, cts.Token);
 
-        var client = _factory.CreateClient();
-        using var ingest = new HttpRequestMessage(HttpMethod.Post, "/api/ingest/test")
+            var client = _factory.CreateClient();
+            using var ingest = new HttpRequestMessage(HttpMethod.Post, "/api/ingest/test")
+            {
+                Content = new StringContent("""{"type":"test"}""",
+                    System.Text.Encoding.UTF8, "application/json")
+            };
+            var response = await client.SendAsync(ingest, cts.Token);
+            response.EnsureSuccessStatusCode();
+
+            var notification = await notificationTask;
+
+            Assert.NotNull(notification);
+            Assert.Equal("test", notification.Provider, StringComparer.OrdinalIgnoreCase);
+        }
+        finally
         {
-            Content = new StringContent("""{"type":"test"}""",
-                System.Text.Encoding.UTF8, "application/json")
-        };
-        var response = await client.SendAsync(ingest, cts.Token);
-        response.EnsureSuccessStatusCode();
-
-        var notification = await notificationTask;
-
-        Assert.NotNull(notification);
-        Assert.Equal("test", notification.Provider, StringComparer.OrdinalIgnoreCase);
+            notifier.Unsubscribe(subscription);
+        }
     }
 
     private sealed class OkHandler : HttpMessageHandler

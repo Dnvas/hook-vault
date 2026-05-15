@@ -13,9 +13,13 @@ public sealed class WebhookEvent
     [Required]
     public string Path { get; set; } = string.Empty;
 
+    // JSON-encoded Dictionary<string, string[]>. Multi-value headers are preserved
+    // as arrays. Single-value headers are stored as single-element arrays.
     public string Headers { get; set; } = "{}";
 
-    public string Body { get; set; } = string.Empty;
+    // Raw request body bytes. Stored as BLOB so binary payloads (multipart, protobuf)
+    // round-trip without UTF-8 corruption.
+    public byte[] Body { get; set; } = [];
 
     public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
 

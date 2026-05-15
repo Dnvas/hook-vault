@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Channels;
 using HookVault.Contracts;
 using HookVault.Domain;
 using HookVault.Infrastructure;
@@ -94,7 +95,7 @@ public sealed class EventsController(
 
         logger.LogInformation(
             "Bulk replay enqueued {Count} events (provider={Provider}, status={Status})",
-            failed.Count, provider ?? "*", statusFilter?.ToString() ?? "*");
+            failed.Count, SanitizeForLog(provider) ?? "*", statusFilter?.ToString() ?? "*");
 
         return Accepted(new ReplayBulkResponse(failed.Count, provider, statusFilter?.ToString()));
     }
@@ -110,15 +111,42 @@ public sealed class EventsController(
         // before any data events arrive — otherwise headers only flush on first write.
         await Response.StartAsync(ct);
 
-        await foreach (var notification in notifier.Reader.ReadAllAsync(ct))
+        var subscription = notifier.Subscribe();
+        try
         {
-            var data = System.Text.Json.JsonSerializer.Serialize(notification,
-                new System.Text.Json.JsonSerializerOptions
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            };
+
+            while (!ct.IsCancellationRequested)
+            {
+                var readTask = subscription.Reader.ReadAsync(ct).AsTask();
+                var heartbeatTask = Task.Delay(TimeSpan.FromSeconds(15), ct);
+
+                var winner = await Task.WhenAny(readTask, heartbeatTask);
+
+                if (winner == readTask)
                 {
-                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-                });
-            await Response.WriteAsync($"data: {data}\n\n", ct);
-            await Response.Body.FlushAsync(ct);
+                    var notification = await readTask;
+                    var data = JsonSerializer.Serialize(notification, jsonOptions);
+                    await Response.WriteAsync($"data: {data}\n\n", ct);
+                }
+                else
+                {
+                    // Heartbeat: SSE comment line, ignored by EventSource client.
+                    await Response.WriteAsync(": heartbeat\n\n", ct);
+                }
+
+                await Response.Body.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException) { /* client disconnected */ }
+        catch (ChannelClosedException) { /* notifier shutting down */ }
+        catch (IOException) { /* underlying transport gone */ }
+        finally
+        {
+            notifier.Unsubscribe(subscription);
         }
     }
 
@@ -138,17 +166,21 @@ public sealed class EventsController(
         var deleted = await repo.DeleteAsync(provider, ct);
         logger.LogWarning(
             "Deleted {Count} events (provider={Provider})",
-            deleted, provider ?? "*");
+            deleted, SanitizeForLog(provider) ?? "*");
 
         return Ok(new DeleteResponse(deleted, provider));
     }
+
+    // Strip CR/LF so user-controlled query params can't forge new log lines.
+    private static string? SanitizeForLog(string? value) =>
+        value?.Replace('\n', '_').Replace('\r', '_');
 
     private static EventDetail ToDetail(WebhookEvent evt) => new(
         evt.Id,
         evt.Provider,
         evt.Path,
-        ParseJsonOrEmpty(evt.Headers),
-        evt.Body,
+        ParseHeadersForApi(evt.Headers),
+        BodyToText(evt.Body),
         evt.ReceivedAt,
         evt.SignatureHeader,
         evt.SignatureValid,
@@ -162,11 +194,34 @@ public sealed class EventsController(
         evt.LastReplayAt,
         evt.LastError);
 
-    private static JsonElement ParseJsonOrEmpty(string raw)
+    // UTF-8 decode with replacement chars for invalid sequences. The API contract
+    // stays string-typed for back-compat with the existing UI; richer binary
+    // exposure is a future PR.
+    private static string BodyToText(byte[] body)
+    {
+        if (body.Length == 0) return string.Empty;
+        return System.Text.Encoding.UTF8.GetString(body);
+    }
+
+    // Read the JSON-stored Dictionary<string, string[]> and reproject as
+    // Dictionary<string, string> (comma-joined) for the UI's existing shape.
+    private static JsonElement ParseHeadersForApi(string raw)
     {
         if (string.IsNullOrEmpty(raw)) return JsonDocument.Parse("{}").RootElement;
-        try { return JsonDocument.Parse(raw).RootElement; }
-        catch (JsonException) { return JsonDocument.Parse("{}").RootElement; }
+        try
+        {
+            var arrayShape = JsonSerializer.Deserialize<Dictionary<string, string[]>>(raw);
+            if (arrayShape is null) return JsonDocument.Parse("{}").RootElement;
+            var flat = arrayShape.ToDictionary(
+                kv => kv.Key,
+                kv => string.Join(", ", kv.Value));
+            var json = JsonSerializer.Serialize(flat);
+            return JsonDocument.Parse(json).RootElement;
+        }
+        catch (JsonException)
+        {
+            return JsonDocument.Parse("{}").RootElement;
+        }
     }
 
     private static JsonElement? TryParseJson(string? raw)

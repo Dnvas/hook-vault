@@ -67,8 +67,8 @@ public sealed class EventsControllerTests : IAsyncLifetime
     {
         Provider = provider,
         Path = $"/api/ingest/{provider}",
-        Headers = "{\"X-Test\":\"yes\"}",
-        Body = "{}",
+        Headers = "{\"X-Test\":[\"yes\"]}",
+        Body = System.Text.Encoding.UTF8.GetBytes("{}"),
         ReceivedAt = receivedAt ?? DateTimeOffset.UtcNow,
         ForwardUrl = "http://localhost/forward",
         ForwardStatusCode = 200,
@@ -173,7 +173,7 @@ public sealed class EventsControllerTests : IAsyncLifetime
     public async Task Detail_returns_full_payload_with_parsed_json()
     {
         var evt = NewEvent();
-        evt.Headers = "{\"X-Test\":\"abc\"}";
+        evt.Headers = "{\"X-Test\":[\"abc\"]}";
         evt.ValidationDetails = "{\"isValid\":true}";
         await SeedAsync(evt);
         var response = await AuthedClient().GetAsync($"/api/events/{evt.Id}");

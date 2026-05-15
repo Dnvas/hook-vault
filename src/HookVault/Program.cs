@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text;
 using HookVault.Auth;
 using HookVault.Cli;
@@ -8,6 +9,7 @@ using HookVault.Middleware;
 using HookVault.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
@@ -136,12 +138,85 @@ app.Logger.LogInformation(
     "HookVault UI → http://localhost:7777/?token={Token}", uiToken);
 
 // --- Auto-migrate DB on startup ---
-// EnsureCreated / Migrate creates tables from EF model without needing CLI migrations.
-// Fine for SQLite dev/prod; for PostgreSQL prod you'd want explicit migrations.
+// db.Database.Migrate() applies any pending EF Core migrations and creates the DB if needed.
+// On pre-migration DBs (created by EnsureCreated before this change) there is no
+// __EFMigrationsHistory table, so Migrate() would try to CREATE TABLE Events and fail
+// because it already exists. BackfillMigrationHistoryAsync detects that case and stamps
+// the initial migration as applied before Migrate() runs.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
-    db.Database.EnsureCreated();
+    await BackfillMigrationHistoryAsync(db);
+    await db.Database.MigrateAsync();
+
+    // Recover from a crash mid-replay: any row stuck at Replaying gets bumped
+    // to ForwardFailed so it's eligible for the bulk replay-failed endpoint.
+    var orphaned = await db.Events
+        .Where(e => e.Status == HookVault.Domain.EventStatus.Replaying)
+        .ToListAsync();
+    if (orphaned.Count > 0)
+    {
+        foreach (var evt in orphaned)
+        {
+            evt.Status = HookVault.Domain.EventStatus.ForwardFailed;
+            evt.LastError ??= "Recovered from interrupted replay attempt.";
+        }
+        await db.SaveChangesAsync();
+        app.Logger.LogWarning("Startup sweep: recovered {Count} orphaned Replaying events.", orphaned.Count);
+    }
+}
+
+static async Task BackfillMigrationHistoryAsync(HookVaultDbContext db)
+{
+    var conn = db.Database.GetDbConnection();
+    var openedHere = false;
+    if (conn.State != ConnectionState.Open)
+    {
+        await conn.OpenAsync();
+        openedHere = true;
+    }
+    try
+    {
+        var eventsExists = await TableExistsAsync(conn, "Events");
+        var historyExists = await TableExistsAsync(conn, "__EFMigrationsHistory");
+
+        if (eventsExists && !historyExists)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE "__EFMigrationsHistory" (
+                    "MigrationId" TEXT NOT NULL CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY,
+                    "ProductVersion" TEXT NOT NULL
+                );
+                INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                VALUES ('00000000000000_Initial', '9.0.16');
+                """;
+            await cmd.ExecuteNonQueryAsync();
+        }
+    }
+    finally
+    {
+        if (openedHere) await conn.CloseAsync();
+    }
+}
+
+static async Task<bool> TableExistsAsync(System.Data.Common.DbConnection conn, string tableName)
+{
+    using var cmd = conn.CreateCommand();
+    if (conn is SqliteConnection)
+    {
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name=@n";
+    }
+    else
+    {
+        cmd.CommandText = "SELECT to_regclass(@n) IS NOT NULL";
+    }
+    var p = cmd.CreateParameter();
+    p.ParameterName = "@n";
+    p.Value = tableName;
+    cmd.Parameters.Add(p);
+    var result = await cmd.ExecuteScalarAsync();
+    return result is not null && result is not DBNull;
 }
 
 // --- Middleware pipeline ---
