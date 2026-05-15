@@ -68,7 +68,7 @@ public sealed class EventStreamTests : IAsyncLifetime
         await Task.Delay(100, cts.Token);
 
         var client = _factory.CreateClient();
-        var ingest = new HttpRequestMessage(HttpMethod.Post, "/api/ingest/test")
+        using var ingest = new HttpRequestMessage(HttpMethod.Post, "/api/ingest/test")
         {
             Content = new StringContent("""{"type":"test"}""",
                 System.Text.Encoding.UTF8, "application/json")
@@ -85,7 +85,10 @@ public sealed class EventStreamTests : IAsyncLifetime
     private sealed class OkHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            HttpRequestMessage request, CancellationToken ct)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK);
+            return Task.FromResult(response);
+        }
     }
 }
