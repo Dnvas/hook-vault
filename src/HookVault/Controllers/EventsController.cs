@@ -175,8 +175,8 @@ public sealed class EventsController(
         evt.Id,
         evt.Provider,
         evt.Path,
-        ParseJsonOrEmpty(evt.Headers),
-        evt.Body,
+        ParseHeadersForApi(evt.Headers),
+        BodyToText(evt.Body),
         evt.ReceivedAt,
         evt.SignatureHeader,
         evt.SignatureValid,
@@ -190,11 +190,34 @@ public sealed class EventsController(
         evt.LastReplayAt,
         evt.LastError);
 
-    private static JsonElement ParseJsonOrEmpty(string raw)
+    // UTF-8 decode with replacement chars for invalid sequences. The API contract
+    // stays string-typed for back-compat with the existing UI; richer binary
+    // exposure is a future PR.
+    private static string BodyToText(byte[] body)
+    {
+        if (body.Length == 0) return string.Empty;
+        return System.Text.Encoding.UTF8.GetString(body);
+    }
+
+    // Read the JSON-stored Dictionary<string, string[]> and reproject as
+    // Dictionary<string, string> (comma-joined) for the UI's existing shape.
+    private static JsonElement ParseHeadersForApi(string raw)
     {
         if (string.IsNullOrEmpty(raw)) return JsonDocument.Parse("{}").RootElement;
-        try { return JsonDocument.Parse(raw).RootElement; }
-        catch (JsonException) { return JsonDocument.Parse("{}").RootElement; }
+        try
+        {
+            var arrayShape = JsonSerializer.Deserialize<Dictionary<string, string[]>>(raw);
+            if (arrayShape is null) return JsonDocument.Parse("{}").RootElement;
+            var flat = arrayShape.ToDictionary(
+                kv => kv.Key,
+                kv => string.Join(", ", kv.Value));
+            var json = JsonSerializer.Serialize(flat);
+            return JsonDocument.Parse(json).RootElement;
+        }
+        catch (JsonException)
+        {
+            return JsonDocument.Parse("{}").RootElement;
+        }
     }
 
     private static JsonElement? TryParseJson(string? raw)
