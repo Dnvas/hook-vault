@@ -1,0 +1,38 @@
+services:
+  hookvault:
+    build: .
+    ports:
+      - "7777:8080"
+    environment:
+      # Generate a secret: openssl rand -hex 32
+      HOOKVAULT_JWT_SECRET: ${HOOKVAULT_JWT_SECRET:?Set HOOKVAULT_JWT_SECRET in a .env file}
+      HOOKVAULT_JWT_ISSUER: ${HOOKVAULT_JWT_ISSUER:-hookvault}
+      HOOKVAULT_JWT_AUDIENCE: ${HOOKVAULT_JWT_AUDIENCE:-hookvault}
+      DATABASE_URL: postgresql://hookvault:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file}@db:5432/hookvault
+    volumes:
+      - ./hookvault.json:/app/config/hookvault.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    # Uncomment to expose Postgres to host tools (pgAdmin, DataGrip, TablePlus, etc.)
+    # ports:
+    #   - "5432:5432"
+    environment:
+      POSTGRES_DB: hookvault
+      POSTGRES_USER: hookvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a .env file}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hookvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
