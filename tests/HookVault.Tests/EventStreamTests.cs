@@ -84,11 +84,19 @@ public sealed class EventStreamTests : IAsyncLifetime
 
     private sealed class OkHandler : HttpMessageHandler
     {
+        private HttpResponseMessage? _response;
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken ct)
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK);
-            return Task.FromResult(response);
+            _response = new HttpResponseMessage(HttpStatusCode.OK);
+            return Task.FromResult(_response);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _response?.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
