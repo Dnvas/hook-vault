@@ -29,6 +29,21 @@ public class SignatureValidatorTests
         return Convert.ToHexString(HMACSHA512.HashData(key, data)).ToLowerInvariant();
     }
 
+    private static string HmacSha256Base64(string secret, string payload)
+    {
+        var key = Encoding.UTF8.GetBytes(secret);
+        var data = Encoding.UTF8.GetBytes(payload);
+        return Convert.ToBase64String(HMACSHA256.HashData(key, data));
+    }
+
+    private static string HmacSha256Base64Url(string secret, string payload)
+    {
+        var key = Encoding.UTF8.GetBytes(secret);
+        var data = Encoding.UTF8.GetBytes(payload);
+        return Convert.ToBase64String(HMACSHA256.HashData(key, data))
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private static IHeaderDictionary MakeHeaders(params (string Key, string Value)[] pairs)
@@ -243,5 +258,112 @@ public class SignatureValidatorTests
         Assert.Equal(correct, result.ComputedSignature);
         Assert.Equal("wrongsig", result.ReceivedSignature);
         Assert.Equal(body, result.PayloadUsed);
+    }
+
+    // ------------------------------------------------------------------ base64 encoding (Shopify-style)
+
+    [Fact]
+    public void Base64_encoding_valid_shopify_style_signature_passes()
+    {
+        const string secret = "shopify_secret";
+        const string body = """{"id":1,"topic":"orders/create"}""";
+        var sig = HmacSha256Base64(secret, body);
+
+        Environment.SetEnvironmentVariable("TEST_SHOPIFY_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha256",
+            SecretEnvVar = "TEST_SHOPIFY_SECRET",
+            SignatureHeader = "X-Shopify-Hmac-SHA256",
+            PayloadFormat = "{body}",
+            SignatureEncoding = "base64",
+        };
+
+        var headers = MakeHeaders(("X-Shopify-Hmac-SHA256", sig));
+        var result = BuildValidator().Validate(config, Utf8(body), headers);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(sig, result.ComputedSignature);
+    }
+
+    [Fact]
+    public void Base64_encoding_wrong_signature_fails()
+    {
+        const string secret = "shopify_secret";
+        const string body = """{"id":1}""";
+
+        Environment.SetEnvironmentVariable("TEST_SHOPIFY_FAIL_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha256",
+            SecretEnvVar = "TEST_SHOPIFY_FAIL_SECRET",
+            SignatureHeader = "X-Shopify-Hmac-SHA256",
+            PayloadFormat = "{body}",
+            SignatureEncoding = "base64",
+        };
+
+        var headers = MakeHeaders(("X-Shopify-Hmac-SHA256", "bm90YXZhbGlkc2ln"));
+        var result = BuildValidator().Validate(config, Utf8(body), headers);
+
+        Assert.False(result.IsValid);
+        Assert.Null(result.Error);
+    }
+
+    // ------------------------------------------------------------------ base64url encoding
+
+    [Fact]
+    public void Base64url_encoding_valid_signature_passes()
+    {
+        const string secret = "url_safe_secret";
+        const string body = "test payload";
+        var sig = HmacSha256Base64Url(secret, body);
+
+        Environment.SetEnvironmentVariable("TEST_B64URL_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha256",
+            SecretEnvVar = "TEST_B64URL_SECRET",
+            SignatureHeader = "X-Signature",
+            PayloadFormat = "{body}",
+            SignatureEncoding = "base64url",
+        };
+
+        var headers = MakeHeaders(("X-Signature", sig));
+        var result = BuildValidator().Validate(config, Utf8(body), headers);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(sig, result.ComputedSignature);
+        Assert.DoesNotContain("=", result.ComputedSignature!);
+        Assert.DoesNotContain("+", result.ComputedSignature);
+        Assert.DoesNotContain("/", result.ComputedSignature);
+    }
+
+    // ------------------------------------------------------------------ hex default (backward compat)
+
+    [Fact]
+    public void Null_signatureEncoding_defaults_to_hex()
+    {
+        const string secret = "hex_default";
+        const string body = "test";
+        var sig = HmacSha256Hex(secret, body);
+
+        Environment.SetEnvironmentVariable("TEST_HEX_DEFAULT_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha256",
+            SecretEnvVar = "TEST_HEX_DEFAULT_SECRET",
+            SignatureHeader = "X-Sig",
+            PayloadFormat = "{body}",
+            SignatureEncoding = null,
+        };
+
+        var headers = MakeHeaders(("X-Sig", sig));
+        var result = BuildValidator().Validate(config, Utf8(body), headers);
+
+        Assert.True(result.IsValid);
     }
 }

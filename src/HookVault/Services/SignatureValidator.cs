@@ -77,12 +77,24 @@ public sealed class SignatureValidator
             _ => throw new NotSupportedException($"Unsupported algorithm '{config.Algorithm}'."),
         };
 
-        var computedHex = Convert.ToHexString(computedBytes).ToLowerInvariant();
+        var computed = config.SignatureEncoding?.ToLowerInvariant() switch
+        {
+            "base64"    => Convert.ToBase64String(computedBytes),
+            "base64url" => Convert.ToBase64String(computedBytes)
+                               .Replace('+', '-').Replace('/', '_').TrimEnd('='),
+            _           => Convert.ToHexString(computedBytes).ToLowerInvariant(),
+        };
+
+        // hex is case-insensitive — normalize both sides before compare
+        // base64 / base64url are case-sensitive — compare received value as-is
+        var normalizedReceived = config.SignatureEncoding?.ToLowerInvariant() is "base64" or "base64url"
+            ? receivedSignature
+            : receivedSignature.ToLowerInvariant();
 
         // 6. Constant-time compare to prevent timing attacks
         var isValid = CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(computedHex),
-            Encoding.UTF8.GetBytes(receivedSignature.ToLowerInvariant()));
+            Encoding.UTF8.GetBytes(computed),
+            Encoding.UTF8.GetBytes(normalizedReceived));
 
         return new SignatureValidationResult
         {
@@ -91,7 +103,7 @@ public sealed class SignatureValidator
             PayloadUsed = payload,
             ExtractedTimestamp = extractedTimestamp,
             ReceivedSignature = receivedSignature,
-            ComputedSignature = computedHex,
+            ComputedSignature = computed,
         };
     }
 
