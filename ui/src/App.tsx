@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { getToken, setToken } from './api/client'
 import { TokenGate } from './components/TokenGate'
@@ -6,9 +6,8 @@ import { TokenGate } from './components/TokenGate'
 const queryClient = new QueryClient()
 
 function Inner() {
-  const [hasToken, setHasToken] = useState(false)
-
-  useEffect(() => {
+  const [hasToken, setHasToken] = useState(() => {
+    // Read ?token= from URL on initial mount, store it, then strip from address bar.
     const params = new URLSearchParams(window.location.search)
     const urlToken = params.get('token')
     if (urlToken) {
@@ -19,8 +18,8 @@ function Inner() {
         : window.location.pathname
       window.history.replaceState({}, '', newUrl)
     }
-    setHasToken(!!getToken())
-  }, [])
+    return !!getToken()
+  })
 
   if (!hasToken) {
     return <TokenGate onToken={() => setHasToken(true)} />
