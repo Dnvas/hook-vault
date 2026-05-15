@@ -42,7 +42,7 @@ export function EventList({
   }, [invalidate])
   useEventStream(onNotification)
 
-  const events: EventSummary[] = data?.events ?? []
+  const events: EventSummary[] = data?.items ?? []
   const providers = health?.providers ?? []
 
   return (

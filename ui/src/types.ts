@@ -35,10 +35,11 @@ export interface ValidationDetails {
   receivedSignature: string
   payloadUsed: string
   extractedTimestamp: string | null
+  error: string | null
 }
 
 export interface ListEventsResponse {
-  events: EventSummary[]
+  items: EventSummary[]
   total: number
   limit: number
   offset: number

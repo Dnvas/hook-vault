@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 
@@ -11,5 +12,8 @@ export function useEvents(filters: { provider?: string; status?: string }) {
 
 export function useInvalidateEvents() {
   const qc = useQueryClient()
-  return () => qc.invalidateQueries({ queryKey: ['events'] })
+  return useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['events'] })
+    qc.invalidateQueries({ queryKey: ['event'] })
+  }, [qc])
 }
