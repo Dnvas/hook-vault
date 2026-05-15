@@ -47,7 +47,7 @@ public sealed class GenerateTokenCommandTests : IDisposable
     [Fact]
     public void Default_args_mint_admin_token_with_30day_expiry()
     {
-        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 32));
+        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 48));
         Environment.SetEnvironmentVariable(IssuerEnv, "hookvault");
         Environment.SetEnvironmentVariable(AudienceEnv, "hookvault");
 
@@ -65,7 +65,7 @@ public sealed class GenerateTokenCommandTests : IDisposable
     [Fact]
     public void Subject_and_expires_flags_are_respected()
     {
-        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 32));
+        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 48));
         Environment.SetEnvironmentVariable(IssuerEnv, "hookvault");
         Environment.SetEnvironmentVariable(AudienceEnv, "hookvault");
 
@@ -81,7 +81,7 @@ public sealed class GenerateTokenCommandTests : IDisposable
     [Fact]
     public void Bad_expires_format_exits_1()
     {
-        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 32));
+        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 48));
 
         var (code, _, stderr) = Run("--expires", "frog");
 
@@ -92,7 +92,7 @@ public sealed class GenerateTokenCommandTests : IDisposable
     [Fact]
     public void Generated_token_validates_against_runtime_parameters()
     {
-        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 32));
+        Environment.SetEnvironmentVariable(SecretEnv, new string('s', 48));
         Environment.SetEnvironmentVariable(IssuerEnv, "hookvault");
         Environment.SetEnvironmentVariable(AudienceEnv, "hookvault");
 
@@ -107,7 +107,7 @@ public sealed class GenerateTokenCommandTests : IDisposable
         {
             ValidIssuer = "hookvault",
             ValidAudience = "hookvault",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(new string('s', 32))),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(new string('s', 48))),
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,

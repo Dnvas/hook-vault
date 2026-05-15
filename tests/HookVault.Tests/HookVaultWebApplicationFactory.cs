@@ -12,7 +12,7 @@ namespace HookVault.Tests;
 
 public sealed class HookVaultWebApplicationFactory : WebApplicationFactory<Program>, IAsyncDisposable
 {
-    public const string TestSecret = "test-secret-with-at-least-32-bytes-pad";
+    public const string TestSecret = "test-secret-with-at-least-48-bytes-of-padding-pad";
     public const string TestIssuer = "hookvault-test";
     public const string TestAudience = "hookvault-test";
 
