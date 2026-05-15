@@ -95,7 +95,7 @@ public sealed class EventsController(
 
         logger.LogInformation(
             "Bulk replay enqueued {Count} events (provider={Provider}, status={Status})",
-            failed.Count, provider ?? "*", statusFilter?.ToString() ?? "*");
+            failed.Count, SanitizeForLog(provider) ?? "*", statusFilter?.ToString() ?? "*");
 
         return Accepted(new ReplayBulkResponse(failed.Count, provider, statusFilter?.ToString()));
     }
@@ -166,10 +166,14 @@ public sealed class EventsController(
         var deleted = await repo.DeleteAsync(provider, ct);
         logger.LogWarning(
             "Deleted {Count} events (provider={Provider})",
-            deleted, provider ?? "*");
+            deleted, SanitizeForLog(provider) ?? "*");
 
         return Ok(new DeleteResponse(deleted, provider));
     }
+
+    // Strip CR/LF so user-controlled query params can't forge new log lines.
+    private static string? SanitizeForLog(string? value) =>
+        value?.Replace('\n', '_').Replace('\r', '_');
 
     private static EventDetail ToDetail(WebhookEvent evt) => new(
         evt.Id,
