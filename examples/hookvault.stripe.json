@@ -1,0 +1,26 @@
+// Stripe webhook — HMAC-SHA256, timestamp prepended to body.
+// Stripe-Signature: t=<unix_ts>,v1=<hex_digest>
+// Stripe signs "<timestamp>.<raw_body>" with the webhook signing secret.
+{
+  "providers": [
+    {
+      "name": "stripe",
+      "path": "/stripe",
+      // Point forwardUrl at your local webhook handler.
+      "forwardUrl": "http://host.docker.internal:3000/webhooks/stripe",
+      "validation": {
+        "algorithm": "hmac-sha256",
+        // Set STRIPE_WEBHOOK_SECRET to the signing secret from the Stripe dashboard.
+        "secretEnvVar": "STRIPE_WEBHOOK_SECRET",
+        "signatureHeader": "Stripe-Signature",
+        // Stripe signs "<timestamp>.<raw_body>".
+        "payloadFormat": "{timestamp}.{body}",
+        "signatureEncoding": "hex",
+        // The header is "t=<ts>,v1=<hex>" — extract the hex digest after "v1=".
+        "signaturePattern": "v1={signature}",
+        // Extract the Unix timestamp after "t=".
+        "timestampPattern": "t={timestamp}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+// Generic HMAC template — copy and adapt for any HMAC-based webhook provider.
+//
+// Supported algorithms:  "hmac-sha256" | "hmac-sha512"
+// Supported encodings:   "hex" (default) | "base64" | "base64url"
+//
+// Common patterns:
+//   hex with prefix:      signaturePattern "sha256={signature}" for header "sha256=abc123"
+//   base64, no prefix:    omit signaturePattern; entire header value is the digest
+//   timestamp in header:  set payloadFormat "{timestamp}.{body}", provide timestampPattern
+{
+  "providers": [
+    {
+      "name": "my-provider",
+      "path": "/my-provider",
+      "forwardUrl": "http://host.docker.internal:3000/webhooks/my-provider",
+      "validation": {
+        // "hmac-sha256" or "hmac-sha512"
+        "algorithm": "hmac-sha256",
+        // Name of the environment variable holding the shared secret.
+        // Never put the secret value here — only the variable name.
+        "secretEnvVar": "MY_WEBHOOK_SECRET",
+        // Header the provider uses to send the signature.
+        "signatureHeader": "X-My-Signature",
+        // How the signed string is constructed.
+        // {body} = raw request body (UTF-8).
+        // {timestamp} = value extracted via timestampPattern (if set).
+        "payloadFormat": "{body}",
+        // How the digest is encoded in the header value.
+        // "hex"       = lowercase hex (default when omitted).
+        // "base64"    = standard base64 with = padding.
+        // "base64url" = URL-safe base64, no padding (- and _ instead of + and /).
+        "signatureEncoding": "hex",
+        // Pattern to extract the digest from the header.
+        // Use {signature} as the placeholder. e.g. "sha256={signature}" strips "sha256=".
+        // Omit or set null if the entire header value is the digest.
+        "signaturePattern": null,
+        // Pattern to extract a timestamp from the signature header.
+        // e.g. "t={timestamp}" for a header like "t=1234,v1=abcd".
+        // Omit or set null if the header contains no timestamp.
+        "timestampPattern": null
+      }
+    }
+  ]
+}

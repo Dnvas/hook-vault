@@ -1,0 +1,20 @@
+// Resend webhook — delivered via Svix.
+//
+// Svix constructs its signed payload from three separate headers:
+//   svix-id:        unique message identifier
+//   svix-timestamp: Unix timestamp
+//   svix-signature: v1,<base64_sig1> v1,<base64_sig2>  (multiple, space-separated)
+//
+// Because the timestamp and message ID live in different headers from the
+// signature, Svix cannot be expressed in HookVault's single-header validation
+// schema. Events are captured and forwarded; signatures are not verified.
+{
+  "providers": [
+    {
+      "name": "resend",
+      "path": "/resend",
+      "forwardUrl": "http://host.docker.internal:3000/webhooks/resend",
+      "validation": null
+    }
+  ]
+}

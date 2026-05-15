@@ -1,0 +1,23 @@
+// Shopify webhook — HMAC-SHA256 over the raw body, base64-encoded.
+// X-Shopify-Hmac-SHA256: <base64_digest>
+// The entire header value is the signature — no prefix to strip.
+{
+  "providers": [
+    {
+      "name": "shopify",
+      "path": "/shopify",
+      "forwardUrl": "http://host.docker.internal:3000/webhooks/shopify",
+      "validation": {
+        "algorithm": "hmac-sha256",
+        // Set SHOPIFY_WEBHOOK_SECRET to your Shopify webhook signing secret.
+        "secretEnvVar": "SHOPIFY_WEBHOOK_SECRET",
+        "signatureHeader": "X-Shopify-Hmac-SHA256",
+        // Shopify signs just the raw body.
+        "payloadFormat": "{body}",
+        // Shopify encodes the digest as standard base64, not hex.
+        "signatureEncoding": "base64"
+        // signaturePattern omitted — when absent, HookVault uses the entire header value as the signature.
+      }
+    }
+  ]
+}
