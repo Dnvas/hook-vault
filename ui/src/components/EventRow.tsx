@@ -53,9 +53,13 @@ export function EventRow({ event, selected, onClick }: EventRowProps) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 border-l-2 transition-all duration-150
+      className={`w-full text-left px-3 py-2.5 border-l-2 transition-all duration-150 group
                   ${statusBorderColor(event.status)}
-                  ${selected ? 'bg-indigo-950/40' : 'hover:bg-slate-800/60'}`}
+                  ${
+                    selected
+                      ? 'bg-indigo-950/50 shadow-[inset_1px_0_0_0_rgba(99,102,241,0.3)]'
+                      : 'hover:bg-slate-800/50'
+                  }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
