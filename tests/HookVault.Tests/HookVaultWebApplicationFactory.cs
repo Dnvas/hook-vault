@@ -67,6 +67,16 @@ public sealed class HookVaultWebApplicationFactory : WebApplicationFactory<Progr
 
             // Remove background services so the ReplayWorker doesn't consume queue items during tests
             services.RemoveAll<IHostedService>();
+
+            // Ensure the shared in-memory connection has the schema before any test request
+            // is served. Production startup calls MigrateAsync(), but EF Core's SQLite migration
+            // runner may open its own connection — in-memory databases are per-connection, so the
+            // shared _connection would remain empty. EnsureCreated against the shared connection
+            // is the deterministic test-time setup path; it is idempotent (no-ops if tables exist).
+            using var sp = services.BuildServiceProvider();
+            using var setupScope = sp.CreateScope();
+            var setupDb = setupScope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
+            setupDb.Database.EnsureCreated();
         });
     }
 

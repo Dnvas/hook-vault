@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text;
 using HookVault.Auth;
 using HookVault.Cli;
@@ -8,6 +9,7 @@ using HookVault.Middleware;
 using HookVault.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
@@ -145,13 +147,18 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
     await BackfillMigrationHistoryAsync(db);
-    db.Database.Migrate();
+    await db.Database.MigrateAsync();
 }
 
 static async Task BackfillMigrationHistoryAsync(HookVaultDbContext db)
 {
     var conn = db.Database.GetDbConnection();
-    await conn.OpenAsync();
+    var openedHere = false;
+    if (conn.State != ConnectionState.Open)
+    {
+        await conn.OpenAsync();
+        openedHere = true;
+    }
     try
     {
         var eventsExists = await TableExistsAsync(conn, "Events");
@@ -173,14 +180,14 @@ static async Task BackfillMigrationHistoryAsync(HookVaultDbContext db)
     }
     finally
     {
-        await conn.CloseAsync();
+        if (openedHere) await conn.CloseAsync();
     }
 }
 
 static async Task<bool> TableExistsAsync(System.Data.Common.DbConnection conn, string tableName)
 {
     using var cmd = conn.CreateCommand();
-    if (conn.GetType().Name.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
+    if (conn is SqliteConnection)
     {
         cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name=@n";
     }
