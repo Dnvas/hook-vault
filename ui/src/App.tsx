@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { getToken, setToken } from './api/client'
 import { TokenGate } from './components/TokenGate'
 import { EventList } from './components/EventList'
+import { EventDetail } from './components/EventDetail'
 
 const queryClient = new QueryClient()
 
@@ -42,10 +43,14 @@ function Inner() {
           onStatusFilter={setStatusFilter}
         />
       </div>
-      <div className="flex-1 overflow-hidden flex items-center justify-center">
-        <p className="text-slate-600 text-sm font-mono">
-          {selectedId ? `Selected: ${selectedId}` : 'Select an event to inspect'}
-        </p>
+      <div className="flex-1 overflow-hidden">
+        {selectedId ? (
+          <EventDetail id={selectedId} />
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-slate-700 text-sm font-mono">Select an event to inspect</p>
+          </div>
+        )}
       </div>
     </div>
   )
