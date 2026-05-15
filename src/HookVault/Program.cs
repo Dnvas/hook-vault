@@ -132,10 +132,15 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Log a ready-to-use UI URL with a 30-day token so developers can click straight in.
-var uiToken = JwtTokenGenerator.Mint(jwtOptions, "ui", TimeSpan.FromDays(30));
-app.Logger.LogInformation(
-    "HookVault UI → http://localhost:7777/?token={Token}", uiToken);
+// In Development, log a ready-to-use UI URL with a short-lived token so devs can
+// click straight in. Production environments stay silent — users mint long-lived
+// tokens via the `generate-token` CLI subcommand.
+if (app.Environment.IsDevelopment())
+{
+    var uiToken = JwtTokenGenerator.Mint(jwtOptions, "ui", TimeSpan.FromHours(1));
+    app.Logger.LogInformation(
+        "HookVault UI → http://localhost:7777/?token={Token}", uiToken);
+}
 
 // --- Auto-migrate DB on startup ---
 // db.Database.Migrate() applies any pending EF Core migrations and creates the DB if needed.
