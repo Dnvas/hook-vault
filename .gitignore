@@ -44,3 +44,6 @@ hookvault.json
 .claude/
 CLAUDE.local.md
 .superpowers/
+
+# Playwright MCP browser session artifacts
+.playwright-mcp/
