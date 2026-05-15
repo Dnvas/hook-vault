@@ -1,0 +1,11 @@
+# Normalise all text files to LF on commit.
+# This prevents dotnet format --verify-no-changes failures on Windows
+# where core.autocrlf converts LF to CRLF on checkout.
+* text=auto eol=lf
+
+# Explicitly binary — never touch line endings.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.db  binary
