@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Channels;
 using HookVault.Contracts;
 using HookVault.Domain;
 using HookVault.Infrastructure;
@@ -110,15 +111,42 @@ public sealed class EventsController(
         // before any data events arrive — otherwise headers only flush on first write.
         await Response.StartAsync(ct);
 
-        await foreach (var notification in notifier.Reader.ReadAllAsync(ct))
+        var subscription = notifier.Subscribe();
+        try
         {
-            var data = System.Text.Json.JsonSerializer.Serialize(notification,
-                new System.Text.Json.JsonSerializerOptions
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            };
+
+            while (!ct.IsCancellationRequested)
+            {
+                var readTask = subscription.Reader.ReadAsync(ct).AsTask();
+                var heartbeatTask = Task.Delay(TimeSpan.FromSeconds(15), ct);
+
+                var winner = await Task.WhenAny(readTask, heartbeatTask);
+
+                if (winner == readTask)
                 {
-                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-                });
-            await Response.WriteAsync($"data: {data}\n\n", ct);
-            await Response.Body.FlushAsync(ct);
+                    var notification = await readTask;
+                    var data = JsonSerializer.Serialize(notification, jsonOptions);
+                    await Response.WriteAsync($"data: {data}\n\n", ct);
+                }
+                else
+                {
+                    // Heartbeat: SSE comment line, ignored by EventSource client.
+                    await Response.WriteAsync(": heartbeat\n\n", ct);
+                }
+
+                await Response.Body.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException) { /* client disconnected */ }
+        catch (ChannelClosedException) { /* notifier shutting down */ }
+        catch (IOException) { /* underlying transport gone */ }
+        finally
+        {
+            notifier.Unsubscribe(subscription);
         }
     }
 
