@@ -57,14 +57,25 @@ public sealed class EventsController(
     }
 
     [HttpPost("{id:guid}/replay")]
-    public async Task<IActionResult> Replay(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Replay(Guid id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] ReplayRequest? request, CancellationToken ct)
     {
         var evt = await repo.GetByIdAsync(id, ct);
         if (evt is null)
             return NotFound(new ApiError("Event not found.", "event_not_found"));
 
-        await queue.EnqueueAsync(id, ct);
-        logger.LogInformation("Enqueued replay for event {EventId} (provider {Provider})", id, evt.Provider);
+        if (!string.IsNullOrEmpty(request?.Body))
+        {
+            var bodyBytes = System.Text.Encoding.UTF8.GetBytes(request.Body);
+            await queue.EnqueueWithBodyAsync(id, bodyBytes, ct);
+            logger.LogInformation(
+                "Enqueued replay with edited body ({Bytes}B) for event {EventId} (provider {Provider})",
+                bodyBytes.Length, id, evt.Provider);
+        }
+        else
+        {
+            await queue.EnqueueAsync(id, ct);
+            logger.LogInformation("Enqueued replay for event {EventId} (provider {Provider})", id, evt.Provider);
+        }
 
         return Accepted(new ReplayEnqueuedResponse(id, "Queued"));
     }
@@ -176,6 +187,10 @@ public sealed class EventsController(
     // Strip CR/LF so user-controlled query params can't forge new log lines.
     private static string? SanitizeForLog(string? value) =>
         value?.Replace('\n', '_').Replace('\r', '_');
+
+    // Optional payload for POST /api/events/{id}/replay — when 'body' is non-null,
+    // the replay uses this text instead of the stored WebhookEvent.Body.
+    public sealed record ReplayRequest(string? Body = null);
 
     private static EventDetail ToDetail(WebhookEvent evt) => new(
         evt.Id,
