@@ -3,6 +3,10 @@ bin/
 obj/
 out/
 
+# UI build output — populated by Docker stage 0 (ui-build) or a local
+# `npm run build && cp -r ui/dist/* src/HookVault/wwwroot/`. Never committed.
+src/HookVault/wwwroot/
+
 # IDE / OS
 .vs/
 .vscode/
