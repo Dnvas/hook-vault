@@ -2,6 +2,7 @@ namespace HookVault.Contracts;
 
 public sealed record ListEventsResponse(
     IReadOnlyList<EventSummary> Items,
-    int Total,
+    int? Total,
     int Limit,
-    int Offset);
+    int Offset,
+    bool TotalApproximate = false);

@@ -49,7 +49,7 @@ public sealed class EventRepository(HookVaultDbContext db)
         return (items, total);
     }
 
-    public async Task<(List<EventSummary> Items, int Total)> ListSummariesAsync(
+    public async Task<(List<EventSummary> Items, int? Total, bool Approximate)> ListSummariesAsync(
         string? provider, string? status, DateTimeOffset? from, DateTimeOffset? to,
         string? bodyContains = null, string? providerEventId = null,
         int limit = 50, int offset = 0, CancellationToken ct = default)
@@ -70,10 +70,6 @@ public sealed class EventRepository(HookVaultDbContext db)
 
         if (!string.IsNullOrEmpty(providerEventId))
             query = query.Where(e => e.ProviderEventId == providerEventId);
-
-        // total reflects all SQL-filterable predicates; when bodyContains is also
-        // active the count is approximate (pre-body-filter) — acceptable for a dev tool.
-        var total = await query.CountAsync(ct);
 
         // Body is a BLOB column; EF Core's SQLite provider cannot translate
         // Encoding.UTF8.GetString(e.Body).Contains(...) to SQL. Over-fetch then
@@ -105,7 +101,13 @@ public sealed class EventRepository(HookVaultDbContext db)
                 e.ForwardedAt))
             .ToList();
 
-        return (items, total);
+        // When a body-substring filter ran in memory, the SQL CountAsync returns the
+        // pre-filter total which is misleading. Surface that with totalApproximate=true.
+        if (!string.IsNullOrEmpty(bodyContains))
+            return (items, (int?)null, true);
+
+        var total = await query.CountAsync(ct);
+        return (items, total, false);
     }
 
     public Task<List<WebhookEvent>> GetFailedAsync(string? provider = null, CancellationToken ct = default)

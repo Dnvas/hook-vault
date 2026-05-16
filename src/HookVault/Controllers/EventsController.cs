@@ -40,10 +40,10 @@ public sealed class EventsController(
         var clampedLimit = Math.Clamp(limit ?? 50, 1, 500);
         var clampedOffset = Math.Max(offset ?? 0, 0);
 
-        var (items, total) = await repo.ListSummariesAsync(
+        var (items, total, approximate) = await repo.ListSummariesAsync(
             provider, status, from, to, bodyContains, providerEventId, clampedLimit, clampedOffset, ct);
 
-        return Ok(new ListEventsResponse(items, total, clampedLimit, clampedOffset));
+        return Ok(new ListEventsResponse(items, total, clampedLimit, clampedOffset, approximate));
     }
 
     [HttpGet("{id:guid}")]
