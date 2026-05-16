@@ -45,6 +45,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         services.AddLogging();
         services.AddDbContext<HookVaultDbContext>(opts => opts.UseSqlite(_connection));
         services.AddScoped<EventRepository>();
+        services.AddSingleton<HookVault.Observability.HookVaultMeter>();
         services.AddScoped<EventForwarder>();
         services.AddHttpClient("forwarder")
             .ConfigurePrimaryHttpMessageHandler(() => handler);
@@ -53,7 +54,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         _providers.Add(provider);
 
         var queue = new ReplayQueue();
-        var worker = new ReplayWorker(queue, provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<ReplayWorker>.Instance)
+        var worker = new ReplayWorker(queue, provider.GetRequiredService<IServiceScopeFactory>(), provider.GetRequiredService<HookVault.Observability.HookVaultMeter>(), NullLogger<ReplayWorker>.Instance)
         {
             RetryDelays = [TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero]
         };
