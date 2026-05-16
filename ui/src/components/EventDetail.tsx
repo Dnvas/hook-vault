@@ -19,6 +19,7 @@ function StatusBadge({ status }: { status: EventStatus }) {
     ForwardFailed: 'bg-red-900/40 text-red-300',
     Replaying: 'bg-amber-900/40 text-amber-300',
     ReplayFailed: 'bg-red-900/40 text-red-300',
+    Captured: 'bg-sky-900/40 text-sky-300',
   }
 
   return (
@@ -67,6 +68,12 @@ export function EventDetail({ id }: EventDetailProps) {
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-sm font-semibold text-white">{data.provider}</span>
             <StatusBadge status={data.status} />
+            {data.status === 'Captured' && (
+              <span className="text-xs font-mono uppercase tracking-wider px-2 py-0.5 rounded
+                               bg-sky-950/60 text-sky-300 border border-sky-700/60">
+                capture only
+              </span>
+            )}
           </div>
           <div className="text-xs text-slate-500 font-mono truncate">
             POST {data.path} · {time}

@@ -15,6 +15,8 @@ function statusBorderColor(status: EventStatus): string {
       return 'border-red-500'
     case 'Replaying':
       return 'border-amber-500'
+    case 'Captured':
+      return 'border-sky-500'
     default:
       return 'border-slate-600'
   }
@@ -29,6 +31,8 @@ function statusDotColor(status: EventStatus): string {
       return 'bg-red-400'
     case 'Replaying':
       return 'bg-amber-400 animate-pulse'
+    case 'Captured':
+      return 'bg-sky-400'
     default:
       return 'bg-slate-500'
   }

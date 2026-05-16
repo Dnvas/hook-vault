@@ -15,7 +15,7 @@ interface EventListProps {
   onStatusFilter: (s: string) => void
 }
 
-const STATUS_OPTIONS = ['', 'Forwarded', 'ForwardFailed', 'Replaying', 'ReplayFailed']
+const STATUS_OPTIONS = ['', 'Captured', 'Forwarded', 'ForwardFailed', 'Replaying', 'ReplayFailed']
 
 export function EventList({
   selectedId,
