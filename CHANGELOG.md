@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-XX
+
+Polish, ergonomics, and distribution improvements on top of v0.2.
+
+### Added
+
+- **`HOOKVAULT_NO_AUTH=true`** opt-out for the management API. Default
+  behaviour unchanged. Loud startup warning when the flag is on.
+- **`captureOnly: true`** per-provider config option. Persists events
+  with the new `EventStatus.Captured` resting state without forwarding;
+  users can replay manually.
+- **In-UI body edit + replay.** Detail panel adds "Edit & Replay";
+  the replay endpoint (`POST /api/events/{id}/replay`) accepts an
+  optional JSON body that replaces the stored bytes for that attempt.
+- **`hmac-sha1` algorithm support** in `SingleHeaderHmacScheme` for
+  legacy GitHub `X-Hub-Signature`, Twitter, and Eventbrite webhooks.
+- **`/metrics` Prometheus endpoint.** Custom counters/histograms plus
+  AspNetCore built-in HTTP metrics. Unauthenticated by design.
+- **Multi-arch Docker images** (`linux/amd64`, `linux/arm64`) on every
+  `v*` tag push to GHCR.
+- **Retention sweep surfacing on `/api/health`.** New `retention` field
+  shows configured caps + last-sweep timestamp + deleted count.
+- **`totalApproximate` flag on `GET /api/events`** when `bodyContains`
+  triggers in-memory post-filtering; UI hides numeric pagination.
+- **`LastReplayWithEditedBody` column** on the Events table flags
+  whether the most recent replay used a body override.
+- **`.claude/skills/` is now committed** to the repo. AI-collaboration
+  documentation ships with the source so any contributor using Claude
+  Code or another agent inherits the project knowledge.
+
+### Changed
+
+- **`ReplayQueue` carries `ReplayJob`** instead of bare `Guid`.
+  `EnqueueWithBodyAsync` lets callers supply a body override.
+- **`EventForwarder.SendAsync`** gains a `(WebhookEvent, byte[], CT)`
+  overload; the existing `(WebhookEvent, CT)` is a thin wrapper.
+
+### Migration notes
+
+- Schema migration `00000000000003_LastReplayEditedBody` adds the new
+  bool column with `defaultValue: false`. SQLite and Postgres upgrade
+  in place. No data loss.
+
 ## [0.2.0] — 2026-05-16
 
 First public release. Closes the hardening sprint (three merged PRs) and

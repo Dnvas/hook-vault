@@ -12,6 +12,7 @@ public sealed class EventRetentionWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<EventRetentionWorker> _logger;
+    private readonly HookVault.Observability.HookVaultMeter _meter;
     private readonly RetentionStats _stats;
     private readonly int? _maxEvents;
     private readonly TimeSpan? _retention;
@@ -20,6 +21,7 @@ public sealed class EventRetentionWorker : BackgroundService
     public EventRetentionWorker(
         IServiceScopeFactory scopeFactory,
         ILogger<EventRetentionWorker> logger,
+        HookVault.Observability.HookVaultMeter meter,
         RetentionStats stats,
         int? maxEvents,
         TimeSpan? retention,
@@ -27,6 +29,7 @@ public sealed class EventRetentionWorker : BackgroundService
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _meter = meter;
         _stats = stats;
         _maxEvents = maxEvents;
         _retention = retention;
@@ -36,6 +39,7 @@ public sealed class EventRetentionWorker : BackgroundService
     public static EventRetentionWorker FromEnvironment(
         IServiceScopeFactory scopeFactory,
         ILogger<EventRetentionWorker> logger,
+        HookVault.Observability.HookVaultMeter meter,
         RetentionStats stats)
     {
         var maxEvents = TryParseInt(Environment.GetEnvironmentVariable("HOOKVAULT_MAX_EVENTS"));
@@ -43,7 +47,7 @@ public sealed class EventRetentionWorker : BackgroundService
         var retention = days is { } d ? TimeSpan.FromDays(d) : (TimeSpan?)null;
         var intervalSeconds = TryParseInt(Environment.GetEnvironmentVariable("HOOKVAULT_RETENTION_INTERVAL_SECONDS"));
         var interval = intervalSeconds is { } s ? TimeSpan.FromSeconds(s) : (TimeSpan?)null;
-        return new EventRetentionWorker(scopeFactory, logger, stats, maxEvents, retention, interval);
+        return new EventRetentionWorker(scopeFactory, logger, meter, stats, maxEvents, retention, interval);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -88,6 +92,8 @@ public sealed class EventRetentionWorker : BackgroundService
             {
                 _logger.LogWarning("Retention sweep deleted {Count} events older than {Days}d.", deleted, window.TotalDays);
                 totalDeleted += deleted;
+                _meter.RetentionDeletedTotal.Add(deleted,
+                    new KeyValuePair<string, object?>("reason", "age"));
             }
         }
 
@@ -109,6 +115,8 @@ public sealed class EventRetentionWorker : BackgroundService
                 {
                     _logger.LogWarning("Retention sweep deleted {Count} oldest events past cap {Cap}.", deleted, max);
                     totalDeleted += deleted;
+                    _meter.RetentionDeletedTotal.Add(deleted,
+                        new KeyValuePair<string, object?>("reason", "count_cap"));
                 }
             }
         }

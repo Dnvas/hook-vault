@@ -18,6 +18,7 @@ public class IngestController(
     EventForwarder forwarder,
     EventNotifier notifier,
     IWebHostEnvironment environment,
+    HookVault.Observability.HookVaultMeter meter,
     ILogger<IngestController> logger) : ControllerBase
 {
     private static readonly HashSet<string> SensitiveHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -147,6 +148,21 @@ public class IngestController(
             // Forward synchronously so the response reflects the current forward status.
             // The forwarder writes the result back onto the event record.
             await forwarder.ForwardAsync(evt, ct);
+        }
+
+        // Record after the capture/forward branch so `evt.Status` reflects the resting state.
+        meter.EventsTotal.Add(1,
+            new KeyValuePair<string, object?>("provider", config.Name),
+            new KeyValuePair<string, object?>("status", evt.Status.ToString()));
+
+        if (config.Validation is not null)
+        {
+            // signatureValid is guaranteed non-null here because the assignment
+            // above lives inside the same `config.Validation is not null` branch.
+            var validationResult = signatureValid == true ? "valid" : "invalid";
+            meter.SignatureValidationTotal.Add(1,
+                new KeyValuePair<string, object?>("provider", config.Name),
+                new KeyValuePair<string, object?>("result", validationResult));
         }
 
         return Accepted(new

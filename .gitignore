@@ -44,8 +44,12 @@ coverage/
 # HookVault runtime config (user-supplied, not committed to the repo)
 hookvault.json
 
-# Local AI assistant configuration — kept out of the repo by design
-.claude/
+# Local AI assistant configuration — only the skills are shared with the repo
+# so any contributor using Claude Code (or another agent) inherits the same
+# project knowledge. Settings, local plans, and CLAUDE.local.md stay personal.
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 CLAUDE.local.md
 .superpowers/
 

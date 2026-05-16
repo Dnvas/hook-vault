@@ -43,6 +43,7 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            new HookVault.Observability.HookVaultMeter(),
             stats,
             maxEvents: 5,
             retention: null);
@@ -65,6 +66,7 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            new HookVault.Observability.HookVaultMeter(),
             stats,
             maxEvents: null,
             retention: TimeSpan.FromDays(1));
@@ -85,6 +87,7 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            new HookVault.Observability.HookVaultMeter(),
             stats,
             maxEvents: null,
             retention: null);
@@ -105,6 +108,7 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            new HookVault.Observability.HookVaultMeter(),
             stats,
             maxEvents: 5,
             retention: null);

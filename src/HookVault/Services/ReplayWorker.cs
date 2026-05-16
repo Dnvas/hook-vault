@@ -6,6 +6,7 @@ namespace HookVault.Services;
 public sealed class ReplayWorker(
     ReplayQueue queue,
     IServiceScopeFactory scopeFactory,
+    HookVault.Observability.HookVaultMeter meter,
     ILogger<ReplayWorker> logger) : BackgroundService
 {
     internal TimeSpan[] RetryDelays { get; init; } =
@@ -48,6 +49,8 @@ public sealed class ReplayWorker(
                 evt.ForwardedAt = DateTimeOffset.UtcNow;
                 evt.ForwardStatusCode = result.StatusCode;
                 await repo.UpdateAsync(evt, ct);
+                meter.ReplaysTotal.Add(1,
+                    new KeyValuePair<string, object?>("outcome", "success"));
                 logger.LogInformation("Replay succeeded for {Id} on attempt {N}", job.EventId, attempt + 1);
                 return;
             }
@@ -65,6 +68,8 @@ public sealed class ReplayWorker(
 
         evt.Status = EventStatus.ReplayFailed;
         await repo.UpdateAsync(evt, CancellationToken.None);
+        meter.ReplaysTotal.Add(1,
+            new KeyValuePair<string, object?>("outcome", "exhausted"));
         logger.LogError("Replay exhausted all attempts for {Id}. Last error: {Error}",
             job.EventId, evt.LastError);
     }

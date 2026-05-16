@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Metrics;
 using HookVaultSignatureValidator = HookVault.Services.SignatureValidator;
 
 if (args.Length > 0 && args[0] == "generate-token")
@@ -74,6 +75,9 @@ builder.Services.AddSingleton<ReplayQueue>();
 // Singleton: owns the Channel<EventNotification> for SSE fanout to connected clients.
 builder.Services.AddSingleton<EventNotifier>();
 
+// Singleton: hosts all custom Prometheus metric instruments for the app lifetime.
+builder.Services.AddSingleton<HookVault.Observability.HookVaultMeter>();
+
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
 
@@ -93,6 +97,7 @@ builder.Services.AddHostedService(sp =>
     HookVault.Services.EventRetentionWorker.FromEnvironment(
         sp.GetRequiredService<IServiceScopeFactory>(),
         sp.GetRequiredService<ILogger<HookVault.Services.EventRetentionWorker>>(),
+        sp.GetRequiredService<HookVault.Observability.HookVaultMeter>(),
         sp.GetRequiredService<HookVault.Services.RetentionStats>()));
 
 // --- Authentication / Authorisation ---
@@ -174,6 +179,14 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "HookVault", Version = "v1" });
 });
+
+// OpenTelemetry metrics: HookVault's custom Meter + AspNetCore built-ins,
+// exported via the Prometheus scraping endpoint mapped below.
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(b => b
+        .AddAspNetCoreInstrumentation()
+        .AddMeter(HookVault.Observability.HookVaultMeter.MeterName)
+        .AddPrometheusExporter());
 
 var app = builder.Build();
 
@@ -295,6 +308,11 @@ if (app.Environment.IsDevelopment())
 // Must come after routing-aware middleware and before MapControllers.
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Metrics endpoint is unauthenticated by design — metrics are operational
+// data, not secrets. Threat model assumes HookVault is not exposed to the
+// public internet (see SECURITY.md).
+app.MapPrometheusScrapingEndpoint("/metrics").AllowAnonymous();
 
 app.MapControllers();
 app.MapFallbackToFile("index.html");
