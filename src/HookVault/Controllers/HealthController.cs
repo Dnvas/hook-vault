@@ -1,5 +1,6 @@
 using HookVault.Configuration;
 using HookVault.Infrastructure;
+using HookVault.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +10,8 @@ namespace HookVault.Controllers;
 [ApiController]
 public class HealthController(
     HookVaultOptions options,
-    EventRepository repo) : ControllerBase
+    EventRepository repo,
+    RetentionStats retention) : ControllerBase
 {
     private static readonly string Version =
         typeof(HealthController).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -32,6 +34,15 @@ public class HealthController(
             database = dbKind,
             eventCount = count,
             oldestEvent = oldest,
+            retention = retention.MaxEvents is null && retention.Retention is null
+                ? null
+                : (object)new
+                {
+                    maxEvents = retention.MaxEvents,
+                    retentionDays = retention.Retention?.TotalDays,
+                    lastSweepAt = retention.LastSweepAt,
+                    lastSweepDeleted = retention.LastSweepDeleted,
+                },
         });
     }
 }

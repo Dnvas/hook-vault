@@ -12,6 +12,7 @@ public sealed class EventRetentionWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<EventRetentionWorker> _logger;
+    private readonly RetentionStats _stats;
     private readonly int? _maxEvents;
     private readonly TimeSpan? _retention;
     private readonly TimeSpan _interval;
@@ -19,12 +20,14 @@ public sealed class EventRetentionWorker : BackgroundService
     public EventRetentionWorker(
         IServiceScopeFactory scopeFactory,
         ILogger<EventRetentionWorker> logger,
+        RetentionStats stats,
         int? maxEvents,
         TimeSpan? retention,
         TimeSpan? interval = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _stats = stats;
         _maxEvents = maxEvents;
         _retention = retention;
         _interval = interval ?? TimeSpan.FromSeconds(300);
@@ -32,14 +35,15 @@ public sealed class EventRetentionWorker : BackgroundService
 
     public static EventRetentionWorker FromEnvironment(
         IServiceScopeFactory scopeFactory,
-        ILogger<EventRetentionWorker> logger)
+        ILogger<EventRetentionWorker> logger,
+        RetentionStats stats)
     {
         var maxEvents = TryParseInt(Environment.GetEnvironmentVariable("HOOKVAULT_MAX_EVENTS"));
         var days = TryParseInt(Environment.GetEnvironmentVariable("HOOKVAULT_RETENTION_DAYS"));
         var retention = days is { } d ? TimeSpan.FromDays(d) : (TimeSpan?)null;
         var intervalSeconds = TryParseInt(Environment.GetEnvironmentVariable("HOOKVAULT_RETENTION_INTERVAL_SECONDS"));
         var interval = intervalSeconds is { } s ? TimeSpan.FromSeconds(s) : (TimeSpan?)null;
-        return new EventRetentionWorker(scopeFactory, logger, maxEvents, retention, interval);
+        return new EventRetentionWorker(scopeFactory, logger, stats, maxEvents, retention, interval);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -72,6 +76,7 @@ public sealed class EventRetentionWorker : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
+        var totalDeleted = 0;
 
         if (_retention is { } window)
         {
@@ -80,7 +85,10 @@ public sealed class EventRetentionWorker : BackgroundService
                 .Where(e => e.ReceivedAt < cutoff)
                 .ExecuteDeleteAsync(ct);
             if (deleted > 0)
+            {
                 _logger.LogWarning("Retention sweep deleted {Count} events older than {Days}d.", deleted, window.TotalDays);
+                totalDeleted += deleted;
+            }
         }
 
         if (_maxEvents is { } max)
@@ -98,9 +106,14 @@ public sealed class EventRetentionWorker : BackgroundService
                     .Where(e => idsToDelete.Contains(e.Id))
                     .ExecuteDeleteAsync(ct);
                 if (deleted > 0)
+                {
                     _logger.LogWarning("Retention sweep deleted {Count} oldest events past cap {Cap}.", deleted, max);
+                    totalDeleted += deleted;
+                }
             }
         }
+
+        _stats.RecordSweep(totalDeleted);
     }
 
     private static int? TryParseInt(string? s) =>

@@ -76,10 +76,24 @@ builder.Services.AddSingleton<EventNotifier>();
 
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
+
+// Singleton: registered before the worker so the hosted-service factory can resolve it.
+builder.Services.AddSingleton(_ =>
+{
+    var maxEvents = int.TryParse(Environment.GetEnvironmentVariable("HOOKVAULT_MAX_EVENTS"), out var m) && m > 0 ? m : (int?)null;
+    var days = int.TryParse(Environment.GetEnvironmentVariable("HOOKVAULT_RETENTION_DAYS"), out var d) && d > 0 ? d : (int?)null;
+    return new HookVault.Services.RetentionStats
+    {
+        MaxEvents = maxEvents,
+        Retention = days is { } x ? TimeSpan.FromDays(x) : null,
+    };
+});
+
 builder.Services.AddHostedService(sp =>
     HookVault.Services.EventRetentionWorker.FromEnvironment(
         sp.GetRequiredService<IServiceScopeFactory>(),
-        sp.GetRequiredService<ILogger<HookVault.Services.EventRetentionWorker>>()));
+        sp.GetRequiredService<ILogger<HookVault.Services.EventRetentionWorker>>(),
+        sp.GetRequiredService<HookVault.Services.RetentionStats>()));
 
 // --- Authentication / Authorisation ---
 // JwtBearer validates the Bearer token on every request. Controllers that don't
