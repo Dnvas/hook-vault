@@ -111,7 +111,28 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// HOOKVAULT_NO_AUTH=true disables [Authorize] enforcement. The JwtBearer scheme
+// stays registered so callers that *do* present a token (e.g. SSE clients) still
+// authenticate, but the default policy passes for everyone.
+var noAuth = string.Equals(
+    Environment.GetEnvironmentVariable("HOOKVAULT_NO_AUTH"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
+
+if (noAuth)
+{
+    builder.Services.AddAuthorization(options =>
+    {
+        options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => true)
+            .Build();
+        options.FallbackPolicy = options.DefaultPolicy;
+    });
+}
+else
+{
+    builder.Services.AddAuthorization();
+}
 
 // --- ASP.NET Core ---
 // InvalidModelStateResponseFactory maps automatic model-binding failures (e.g. a string
@@ -150,6 +171,14 @@ if (app.Environment.IsDevelopment())
     var uiToken = JwtTokenGenerator.Mint(jwtOptions, "ui", TimeSpan.FromHours(1));
     app.Logger.LogInformation(
         "HookVault UI → http://localhost:7777/?token={Token}", uiToken);
+}
+
+if (noAuth)
+{
+    app.Logger.LogWarning(
+        "HOOKVAULT_NO_AUTH=true: the management API is unauthenticated. " +
+        "Anyone who can reach this listener can read, replay, and delete events. " +
+        "Make sure HookVault is bound to 127.0.0.1 only, or remove this flag.");
 }
 
 // --- Auto-migrate DB on startup ---
