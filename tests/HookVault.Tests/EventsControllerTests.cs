@@ -197,8 +197,8 @@ public sealed class EventsControllerTests : IAsyncLifetime
         {
             while (ids.Count < expected)
             {
-                var id = await queue.Reader.ReadAsync(cts.Token);
-                ids.Add(id);
+                var job = await queue.Reader.ReadAsync(cts.Token);
+                ids.Add(job.EventId);
             }
         }
         catch (OperationCanceledException) { }

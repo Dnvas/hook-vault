@@ -104,7 +104,7 @@ public sealed class EventRepository(HookVaultDbContext db)
         // When a body-substring filter ran in memory, the SQL CountAsync returns the
         // pre-filter total which is misleading. Surface that with totalApproximate=true.
         if (!string.IsNullOrEmpty(bodyContains))
-            return (items, (int?)null, true);
+            return (items, null, true);
 
         var total = await query.CountAsync(ct);
         return (items, total, false);

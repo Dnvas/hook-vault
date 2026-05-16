@@ -135,9 +135,19 @@ public class IngestController(
         logger.LogInformation("Captured event {Id} for provider '{Provider}'", evt.Id, config.Name);
         notifier.Notify(new EventNotification(evt.Id, config.Name, evt.Status.ToString()));
 
-        // Forward synchronously so the response reflects the current forward status.
-        // The forwarder writes the result back onto the event record.
-        await forwarder.ForwardAsync(evt, ct);
+        if (config.CaptureOnly)
+        {
+            // Resting state for capture-only providers: persisted but not forwarded.
+            // Users can manually replay when their downstream is ready.
+            evt.Status = EventStatus.Captured;
+            await repo.UpdateAsync(evt, ct);
+        }
+        else
+        {
+            // Forward synchronously so the response reflects the current forward status.
+            // The forwarder writes the result back onto the event record.
+            await forwarder.ForwardAsync(evt, ct);
+        }
 
         return Accepted(new
         {

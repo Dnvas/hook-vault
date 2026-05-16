@@ -18,4 +18,7 @@ public sealed class ProviderConfig
 
     [JsonPropertyName("dedupEventIdHeader")]
     public string? DedupEventIdHeader { get; init; }
+
+    [JsonPropertyName("captureOnly")]
+    public bool CaptureOnly { get; init; }
 }

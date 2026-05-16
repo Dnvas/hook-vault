@@ -8,4 +8,5 @@ public enum EventStatus
     ForwardFailed = 3,
     Replaying = 4,
     ReplayFailed = 5,
+    Captured = 6,
 }

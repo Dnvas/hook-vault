@@ -53,7 +53,14 @@ export const api = {
 
   getEvent: (id: string) => request<EventDetail>(`/api/events/${id}`),
 
-  replayEvent: (id: string) => request<unknown>(`/api/events/${id}/replay`, { method: 'POST' }),
+  replayEvent: (id: string, body?: string) => {
+    const init: RequestInit = { method: 'POST' }
+    if (body != null) {
+      init.headers = { 'Content-Type': 'application/json' }
+      init.body = JSON.stringify({ body })
+    }
+    return request<unknown>(`/api/events/${id}/replay`, init)
+  },
 
   replayFailed: () => request<unknown>('/api/events/replay-failed', { method: 'POST' }),
 

@@ -5,6 +5,7 @@ export type EventStatus =
   | 'ForwardFailed'
   | 'Replaying'
   | 'ReplayFailed'
+  | 'Captured'
 
 export interface EventSummary {
   id: string
