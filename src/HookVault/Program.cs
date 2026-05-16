@@ -74,6 +74,10 @@ builder.Services.AddSingleton<EventNotifier>();
 
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
+builder.Services.AddHostedService(sp =>
+    HookVault.Services.EventRetentionWorker.FromEnvironment(
+        sp.GetRequiredService<IServiceScopeFactory>(),
+        sp.GetRequiredService<ILogger<HookVault.Services.EventRetentionWorker>>()));
 
 // --- Authentication / Authorisation ---
 // JwtBearer validates the Bearer token on every request. Controllers that don't
