@@ -13,14 +13,14 @@ public sealed class JwtOptionsTests
     {
         var config = Config(new()
         {
-            ["HOOKVAULT_JWT_SECRET"] = new string('s', 32),
+            ["HOOKVAULT_JWT_SECRET"] = new string('s', 48),
             ["HOOKVAULT_JWT_ISSUER"] = "iss",
             ["HOOKVAULT_JWT_AUDIENCE"] = "aud",
         });
 
         var options = JwtOptions.FromConfiguration(config);
 
-        Assert.Equal(new string('s', 32), options.Secret);
+        Assert.Equal(new string('s', 48), options.Secret);
         Assert.Equal("iss", options.Issuer);
         Assert.Equal("aud", options.Audience);
     }
@@ -30,7 +30,7 @@ public sealed class JwtOptionsTests
     {
         var config = Config(new()
         {
-            ["Jwt:Secret"] = new string('s', 32),
+            ["Jwt:Secret"] = new string('s', 48),
             ["Jwt:Issuer"] = "iss2",
         });
 
@@ -45,7 +45,7 @@ public sealed class JwtOptionsTests
     {
         var config = Config(new()
         {
-            ["HOOKVAULT_JWT_SECRET"] = new string('s', 32),
+            ["HOOKVAULT_JWT_SECRET"] = new string('s', 48),
         });
 
         var options = JwtOptions.FromConfiguration(config);
@@ -72,6 +72,22 @@ public sealed class JwtOptionsTests
         });
 
         var ex = Assert.Throws<InvalidOperationException>(() => JwtOptions.FromConfiguration(config));
-        Assert.Contains("32 bytes", ex.Message);
+        Assert.Contains("48 bytes", ex.Message);
+    }
+
+    [Fact]
+    public void FromConfiguration_47ByteSecret_Throws()
+    {
+        var cfg = Config(new() { ["HOOKVAULT_JWT_SECRET"] = new string('x', 47) });
+        var ex = Assert.Throws<InvalidOperationException>(() => JwtOptions.FromConfiguration(cfg));
+        Assert.Contains("48 bytes", ex.Message);
+    }
+
+    [Fact]
+    public void FromConfiguration_48ByteSecret_Succeeds()
+    {
+        var cfg = Config(new() { ["HOOKVAULT_JWT_SECRET"] = new string('x', 48) });
+        var opts = JwtOptions.FromConfiguration(cfg);
+        Assert.NotNull(opts);
     }
 }

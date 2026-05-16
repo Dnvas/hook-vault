@@ -77,8 +77,8 @@ public sealed class IngestControllerTests : IAsyncLifetime
     public async Task Ingest_UnknownProvider_Returns404()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsync("/api/ingest/does-not-exist",
-            new StringContent("{}", Encoding.UTF8, "application/json"));
+        using var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/api/ingest/does-not-exist", content);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -88,8 +88,8 @@ public sealed class IngestControllerTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var body = """{"type":"evt"}""";
-        var response = await client.PostAsync("/api/ingest/open",
-            new StringContent(body, Encoding.UTF8, "application/json"));
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/api/ingest/open", content);
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.NotNull(_forwardHandler.LastRequest);

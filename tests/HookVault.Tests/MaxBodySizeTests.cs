@@ -1,6 +1,6 @@
 using System.Net;
-using System.Net.Http.Json;
 using HookVault.Configuration;
+using HookVault.Infrastructure;
 using HookVault.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,13 +9,15 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace HookVault.Tests;
 
 [Collection("EnvVarMutation")]
-public sealed class MultiSegmentRouteTests : IAsyncLifetime
+public sealed class MaxBodySizeTests : IAsyncLifetime
 {
     private HookVaultWebApplicationFactory _baseFactory = null!;
     private WebApplicationFactory<Program> _factory = null!;
 
     public async Task InitializeAsync()
     {
+        Environment.SetEnvironmentVariable("HOOKVAULT_MAX_BODY_BYTES", "1024");
+
         _baseFactory = new HookVaultWebApplicationFactory();
         _factory = _baseFactory.WithWebHostBuilder(b => b.ConfigureServices(s =>
         {
@@ -26,19 +28,18 @@ public sealed class MultiSegmentRouteTests : IAsyncLifetime
                 [
                     new ProviderConfig
                     {
-                        Name = "stripe-v2",
-                        Path = "/stripe/v2",
-                        ForwardUrl = "http://localhost/forward",
+                        Name = "open",
+                        Path = "/open",
+                        ForwardUrl = "http://localhost/open",
                         Validation = null,
                     }
                 ]
             });
-
             s.AddHttpClient("forwarder").ConfigurePrimaryHttpMessageHandler(() => new OkHandler());
         }));
 
         using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<Infrastructure.HookVaultDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
         await db.Database.EnsureCreatedAsync();
     }
 
@@ -46,24 +47,27 @@ public sealed class MultiSegmentRouteTests : IAsyncLifetime
     {
         await _factory.DisposeAsync();
         await _baseFactory.DisposeAsync();
+        Environment.SetEnvironmentVariable("HOOKVAULT_MAX_BODY_BYTES", null);
     }
 
     [Fact]
-    public async Task Ingest_MatchesMultiSegmentProviderPath()
+    public async Task Ingest_BodyUnderCap_Returns202()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/ingest/stripe/v2", new { type = "evt" });
-
+        var body = new string('x', 512);
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/api/ingest/open", content);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
     [Fact]
-    public async Task Ingest_ReturnsNotFoundForUnconfiguredMultiSegmentPath()
+    public async Task Ingest_BodyOverCap_Returns413()
     {
         var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/ingest/stripe/v9", new { type = "evt" });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = new string('x', 2048); // > 1024 cap
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/api/ingest/open", content);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
 
     private sealed class OkHandler : HttpMessageHandler

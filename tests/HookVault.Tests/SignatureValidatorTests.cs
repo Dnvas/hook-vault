@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using HookVault.Configuration;
 using HookVault.Services;
+using HookVault.Services.Schemes;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 
@@ -11,7 +12,8 @@ namespace HookVault.Tests;
 // [Fact] = single non-parameterised test.
 public class SignatureValidatorTests
 {
-    private static SignatureValidator BuildValidator() => new();
+    private static SignatureValidator BuildValidator() =>
+        new(new IIngestSignatureScheme[] { new SingleHeaderHmacScheme() });
 
     private static byte[] Utf8(string s) => Encoding.UTF8.GetBytes(s);
 

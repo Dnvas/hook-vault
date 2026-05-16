@@ -24,4 +24,10 @@ public sealed class ValidationConfig
 
     [JsonPropertyName("signatureEncoding")]
     public string? SignatureEncoding { get; init; }
+
+    [JsonPropertyName("scheme")]
+    public string? Scheme { get; init; }
+
+    [JsonPropertyName("maxAgeSeconds")]
+    public int? MaxAgeSeconds { get; init; }
 }

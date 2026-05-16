@@ -5,7 +5,7 @@ namespace HookVault.Auth;
 
 public sealed record JwtOptions(string Secret, string Issuer, string Audience)
 {
-    public const int MinimumSecretBytes = 32;
+    public const int MinimumSecretBytes = 48;
 
     public static JwtOptions FromConfiguration(IConfiguration config)
     {
@@ -13,7 +13,7 @@ public sealed record JwtOptions(string Secret, string Issuer, string Audience)
         if (string.IsNullOrEmpty(secret))
         {
             throw new InvalidOperationException(
-                "HOOKVAULT_JWT_SECRET must be set (min 32 bytes) before HookVault can start.");
+                "HOOKVAULT_JWT_SECRET must be set (min 48 bytes) before HookVault can start.");
         }
 
         if (Encoding.UTF8.GetByteCount(secret) < MinimumSecretBytes)
