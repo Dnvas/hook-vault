@@ -45,6 +45,11 @@ public sealed class WebhookEvent
 
     public string? LastError { get; set; }
 
+    // True when the most recent replay used a body override (in-UI edit flow);
+    // false on every other replay. Purely informational; the stored Body
+    // is never mutated.
+    public bool LastReplayWithEditedBody { get; set; }
+
     // SHA-256 of the raw body bytes (lowercase hex). Used by the dedup path to
     // detect identical re-deliveries from a provider.
     public string? BodyHash { get; set; }

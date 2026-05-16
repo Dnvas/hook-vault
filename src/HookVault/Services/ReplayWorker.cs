@@ -13,31 +13,34 @@ public sealed class ReplayWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var eventId in queue.Reader.ReadAllAsync(stoppingToken))
-            await ProcessAsync(eventId, stoppingToken);
+        await foreach (var job in queue.Reader.ReadAllAsync(stoppingToken))
+            await ProcessAsync(job, stoppingToken);
     }
 
-    private async Task ProcessAsync(Guid eventId, CancellationToken ct)
+    private async Task ProcessAsync(ReplayJob job, CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<EventRepository>();
         var forwarder = scope.ServiceProvider.GetRequiredService<EventForwarder>();
 
-        var evt = await repo.GetByIdAsync(eventId, ct);
+        var evt = await repo.GetByIdAsync(job.EventId, ct);
         if (evt is null)
         {
-            logger.LogWarning("Replay skipped: event {Id} not found", eventId);
+            logger.LogWarning("Replay skipped: event {Id} not found", job.EventId);
             return;
         }
 
         evt.Status = EventStatus.Replaying;
         evt.ReplayCount++;
         evt.LastReplayAt = DateTimeOffset.UtcNow;
+        evt.LastReplayWithEditedBody = job.BodyOverride is not null;
         await repo.UpdateAsync(evt, ct);
+
+        var bodyToSend = job.BodyOverride ?? evt.Body;
 
         for (var attempt = 0; attempt < RetryDelays.Length + 1; attempt++)
         {
-            var result = await forwarder.SendAsync(evt, ct);
+            var result = await forwarder.SendAsync(evt, bodyToSend, ct);
 
             if (result.Success)
             {
@@ -45,7 +48,7 @@ public sealed class ReplayWorker(
                 evt.ForwardedAt = DateTimeOffset.UtcNow;
                 evt.ForwardStatusCode = result.StatusCode;
                 await repo.UpdateAsync(evt, ct);
-                logger.LogInformation("Replay succeeded for {Id} on attempt {N}", eventId, attempt + 1);
+                logger.LogInformation("Replay succeeded for {Id} on attempt {N}", job.EventId, attempt + 1);
                 return;
             }
 
@@ -55,7 +58,7 @@ public sealed class ReplayWorker(
             if (attempt < RetryDelays.Length)
             {
                 logger.LogWarning("Replay attempt {N} failed for {Id}, retrying in {Delay}s",
-                    attempt + 1, eventId, RetryDelays[attempt].TotalSeconds);
+                    attempt + 1, job.EventId, RetryDelays[attempt].TotalSeconds);
                 await Task.Delay(RetryDelays[attempt], ct);
             }
         }
@@ -63,6 +66,6 @@ public sealed class ReplayWorker(
         evt.Status = EventStatus.ReplayFailed;
         await repo.UpdateAsync(evt, CancellationToken.None);
         logger.LogError("Replay exhausted all attempts for {Id}. Last error: {Error}",
-            eventId, evt.LastError);
+            job.EventId, evt.LastError);
     }
 }

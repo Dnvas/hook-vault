@@ -17,12 +17,15 @@ public sealed class EventForwarder(IHttpClientFactory httpClientFactory, EventRe
         "Authorization",
     };
 
-    internal async Task<ForwardResult> SendAsync(WebhookEvent evt, CancellationToken ct)
+    internal Task<ForwardResult> SendAsync(WebhookEvent evt, CancellationToken ct)
+        => SendAsync(evt, evt.Body, ct);
+
+    internal async Task<ForwardResult> SendAsync(WebhookEvent evt, byte[] body, CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient("forwarder");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, evt.ForwardUrl);
-        request.Content = new ByteArrayContent(evt.Body);
+        request.Content = new ByteArrayContent(body);
 
         var storedHeaders =
             System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string[]>>(evt.Headers)
