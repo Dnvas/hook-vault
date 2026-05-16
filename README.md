@@ -49,7 +49,14 @@ HOOKVAULT_JWT_SECRET=$(openssl rand -hex 32)
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-Then:
+HookVault ships as a multi-arch Docker image (`linux/amd64`, `linux/arm64`).
+Pull directly with:
+
+```bash
+docker pull ghcr.io/dnvas/hookvault:latest
+```
+
+Or run with the bundled `docker-compose.yml` (builds locally from source):
 
 ```bash
 docker compose up
@@ -135,7 +142,7 @@ provider-specific logic in the binary.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `algorithm` | string | yes | `"hmac-sha256"` or `"hmac-sha512"` |
+| `algorithm` | string | yes | `"hmac-sha1"`, `"hmac-sha256"` (default), or `"hmac-sha512"` |
 | `secretEnvVar` | string | yes | Name of the env var holding the signing secret (never the secret itself) |
 | `signatureHeader` | string | yes | Request header containing the provider's signature |
 | `payloadFormat` | string | yes | How the signed string is built — `{body}` and `{timestamp}` are substituted |
@@ -144,6 +151,30 @@ provider-specific logic in the binary.
 | `timestampPattern` | string | no | Pattern to extract a timestamp from the same header |
 
 Set `validation` to `null` to capture and forward without any signature checking.
+
+### Capture-only providers
+
+Set `"captureOnly": true` on a provider to persist events without
+forwarding them. Useful when your downstream local app is intermittent
+or you just want to inspect what arrives. Replays via the UI or API
+work normally.
+
+```json
+{
+  "name": "stripe",
+  "path": "/stripe",
+  "forwardUrl": "http://host.docker.internal:3000/webhooks/stripe",
+  "captureOnly": true,
+  "validation": null
+}
+```
+
+### Disabling auth for single-user local dev
+
+Set `HOOKVAULT_NO_AUTH=true` to skip JWT enforcement on the management
+API. A loud warning is logged at startup. Intended only when the
+listener is bound to `127.0.0.1`. **Do not enable in any environment
+where the port is reachable from outside the host.**
 
 ## Provider examples
 
@@ -199,6 +230,20 @@ DATABASE_URL=Host=db;Database=hookvault;Username=hookvault;Password=secret
 ```
 
 See `docker-compose.postgres.yml` for a ready-to-use PostgreSQL setup.
+
+## Metrics
+
+`GET /metrics` returns Prometheus-format metrics:
+
+- `hookvault_events_total{provider, status}`
+- `hookvault_replays_total{outcome}`
+- `hookvault_forward_duration_seconds{provider, outcome}`
+- `hookvault_retention_deleted_total{reason}`
+- `hookvault_signature_validation_total{provider, result}`
+
+Plus standard ASP.NET Core HTTP metrics. The endpoint is unauthenticated.
+Scrape it from Prometheus / Grafana Agent / OpenTelemetry collector
+running on the same host.
 
 ## Development
 
