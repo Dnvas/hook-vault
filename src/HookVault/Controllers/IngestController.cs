@@ -157,12 +157,9 @@ public class IngestController(
 
         if (config.Validation is not null)
         {
-            var validationResult = signatureValid switch
-            {
-                true => "valid",
-                false => "invalid",
-                _ => "skipped",
-            };
+            // signatureValid is guaranteed non-null here because the assignment
+            // above lives inside the same `config.Validation is not null` branch.
+            var validationResult = signatureValid == true ? "valid" : "invalid";
             meter.SignatureValidationTotal.Add(1,
                 new KeyValuePair<string, object?>("provider", config.Name),
                 new KeyValuePair<string, object?>("result", validationResult));
