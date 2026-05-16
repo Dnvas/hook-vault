@@ -108,6 +108,22 @@ public sealed class EventRepository(HookVaultDbContext db)
         return min;
     }
 
+    public Task<WebhookEvent?> FindDuplicateAsync(
+        string provider,
+        string bodyHash,
+        string? providerEventId,
+        DateTimeOffset since,
+        CancellationToken ct = default)
+    {
+        var q = db.Events
+            .Where(e => e.Provider == provider && e.BodyHash == bodyHash && e.ReceivedAt >= since);
+
+        if (!string.IsNullOrEmpty(providerEventId))
+            q = q.Where(e => e.ProviderEventId == providerEventId);
+
+        return q.OrderByDescending(e => e.ReceivedAt).FirstOrDefaultAsync(ct);
+    }
+
     public async Task<int> DeleteAsync(string? provider = null, CancellationToken ct = default)
     {
         var query = db.Events.AsQueryable();

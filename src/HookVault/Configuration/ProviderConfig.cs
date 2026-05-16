@@ -15,4 +15,7 @@ public sealed class ProviderConfig
 
     [JsonPropertyName("validation")]
     public ValidationConfig? Validation { get; init; }
+
+    [JsonPropertyName("dedupEventIdHeader")]
+    public string? DedupEventIdHeader { get; init; }
 }
