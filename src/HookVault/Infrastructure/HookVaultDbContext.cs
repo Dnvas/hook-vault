@@ -27,6 +27,8 @@ public class HookVaultDbContext(DbContextOptions<HookVaultDbContext> options) : 
             entity.HasIndex(e => e.Provider);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.ReceivedAt);
+            entity.HasIndex(e => e.BodyHash);
+            entity.HasIndex(e => e.ProviderEventId);
 
             // Store enum as string so the DB is human-readable (not magic ints)
             entity.Property(e => e.Status)

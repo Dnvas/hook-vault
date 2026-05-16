@@ -44,6 +44,40 @@ public class IngestController(
 
         var rawBody = HttpContext.Items[RawBodyMiddleware.RawBodyKey] as byte[] ?? [];
 
+        // Compute body hash (SHA-256 lowercase hex) for dedup.
+        var bodyHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(rawBody))
+                              .ToLowerInvariant();
+
+        // Extract optional provider event id from the configured header.
+        string? providerEventId = null;
+        if (!string.IsNullOrEmpty(config.DedupEventIdHeader)
+            && Request.Headers.TryGetValue(config.DedupEventIdHeader, out var idValues)
+            && !string.IsNullOrEmpty(idValues))
+        {
+            providerEventId = idValues.ToString();
+        }
+
+        // Dedup: within a 24h window, identical (provider, body-hash[, event-id])
+        // returns the existing event instead of double-storing.
+        var existing = await repo.FindDuplicateAsync(
+            config.Name, bodyHash, providerEventId,
+            DateTimeOffset.UtcNow.AddHours(-24), ct);
+
+        if (existing is not null)
+        {
+            logger.LogInformation(
+                "Duplicate ingest for provider '{Provider}' matched existing event {EventId}",
+                config.Name, existing.Id);
+
+            return Accepted(new
+            {
+                eventId = existing.Id,
+                provider = config.Name,
+                duplicate = true,
+                status = existing.Status.ToString(),
+            });
+        }
+
         // Strip sensitive header values before persistence. The forwarder still
         // uses the live Request headers on the ingest path; replays from the DB
         // will see [redacted] in place, which means the local upstream won't
@@ -92,6 +126,8 @@ public class IngestController(
             SignatureValid = signatureValid,
             ValidationDetails = validationDetails,
             ForwardUrl = config.ForwardUrl,
+            BodyHash = bodyHash,
+            ProviderEventId = providerEventId,
             Status = EventStatus.Received,
         };
 

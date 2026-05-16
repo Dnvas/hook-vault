@@ -44,4 +44,13 @@ public sealed class WebhookEvent
     public DateTimeOffset? LastReplayAt { get; set; }
 
     public string? LastError { get; set; }
+
+    // SHA-256 of the raw body bytes (lowercase hex). Used by the dedup path to
+    // detect identical re-deliveries from a provider.
+    public string? BodyHash { get; set; }
+
+    // Provider-supplied event id, extracted from a header the provider config
+    // names (e.g. Stripe-Signature 't=...' or X-GitHub-Delivery). Optional;
+    // when null, dedup uses BodyHash alone.
+    public string? ProviderEventId { get; set; }
 }
