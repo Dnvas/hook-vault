@@ -88,8 +88,12 @@ public sealed class SingleHeaderHmacScheme : IIngestSignatureScheme
         var keyBytes = Encoding.UTF8.GetBytes(secret);
         var payloadBytes = Encoding.UTF8.GetBytes(payload);
 
+        // SHA-1 is broken for collision resistance but remains safe for HMAC
+        // because HMAC security depends on the key, not hash collision resistance.
+        // Needed for legacy providers: GitHub X-Hub-Signature, Twitter, Eventbrite.
         var computedBytes = algorithm switch
         {
+            "hmac-sha1" => HMACSHA1.HashData(keyBytes, payloadBytes),
             "hmac-sha256" => HMACSHA256.HashData(keyBytes, payloadBytes),
             "hmac-sha512" => HMACSHA512.HashData(keyBytes, payloadBytes),
             _ => throw new NotSupportedException($"Unsupported algorithm '{config.Algorithm}'."),

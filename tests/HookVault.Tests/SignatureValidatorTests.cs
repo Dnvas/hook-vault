@@ -369,6 +369,63 @@ public class SignatureValidatorTests
         Assert.True(result.IsValid);
     }
 
+    // ------------------------------------------------------------------ hmac-sha1 (GitHub X-Hub-Signature, legacy providers)
+
+    [Fact]
+    public void Validate_HmacSha1_ValidSignature_Returns_Valid()
+    {
+        const string secret = "legacy_secret";
+        const string body = """{"action":"push"}""";
+        var key = Encoding.UTF8.GetBytes(secret);
+        var data = Encoding.UTF8.GetBytes(body);
+        var sig = Convert.ToHexString(HMACSHA1.HashData(key, data)).ToLowerInvariant();
+
+        Environment.SetEnvironmentVariable("TEST_SHA1_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha1",
+            SecretEnvVar = "TEST_SHA1_SECRET",
+            SignatureHeader = "X-Hub-Signature",
+            PayloadFormat = "{body}",
+            SignaturePattern = "sha1={signature}",
+        };
+
+        var headers = MakeHeaders(("X-Hub-Signature", $"sha1={sig}"));
+        var result = BuildValidator().Validate(config, Utf8(body), headers);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("hmac-sha1", result.AlgorithmUsed);
+    }
+
+    [Fact]
+    public void Validate_HmacSha1_TamperedBody_Returns_Invalid()
+    {
+        const string secret = "legacy_secret";
+        const string originalBody = """{"action":"push"}""";
+        var key = Encoding.UTF8.GetBytes(secret);
+        var data = Encoding.UTF8.GetBytes(originalBody);
+        var sig = Convert.ToHexString(HMACSHA1.HashData(key, data)).ToLowerInvariant();
+
+        Environment.SetEnvironmentVariable("TEST_SHA1_TAMPER_SECRET", secret);
+
+        var config = new ValidationConfig
+        {
+            Algorithm = "hmac-sha1",
+            SecretEnvVar = "TEST_SHA1_TAMPER_SECRET",
+            SignatureHeader = "X-Hub-Signature",
+            PayloadFormat = "{body}",
+            SignaturePattern = "sha1={signature}",
+        };
+
+        const string tamperedBody = """{"action":"delete"}""";
+        var headers = MakeHeaders(("X-Hub-Signature", $"sha1={sig}"));
+        var result = BuildValidator().Validate(config, Utf8(tamperedBody), headers);
+
+        Assert.False(result.IsValid);
+        Assert.Null(result.Error);
+    }
+
     // ------------------------------------------------------------------ unknown encoding → error
 
     [Theory]
