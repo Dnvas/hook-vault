@@ -27,4 +27,7 @@ public sealed class ValidationConfig
 
     [JsonPropertyName("scheme")]
     public string? Scheme { get; init; }
+
+    [JsonPropertyName("maxAgeSeconds")]
+    public int? MaxAgeSeconds { get; init; }
 }

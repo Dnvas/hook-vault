@@ -63,6 +63,20 @@ public sealed class SingleHeaderHmacScheme : IIngestSignatureScheme
                 $"Could not extract timestamp from header value '{headerRaw}' " +
                 $"using pattern '{config.TimestampPattern}'.");
 
+        // Replay-attack window: when configured, reject signatures whose
+        // extracted timestamp is older than maxAgeSeconds. Unset = no check.
+        if (config.MaxAgeSeconds is { } maxAge && extractedTimestamp is not null)
+        {
+            if (!long.TryParse(extractedTimestamp, out var unixSeconds))
+                return SignatureValidationResult.Fail(
+                    $"Timestamp '{extractedTimestamp}' is not a valid Unix seconds value.");
+
+            var ageSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - unixSeconds;
+            if (ageSeconds > maxAge)
+                return SignatureValidationResult.Fail(
+                    $"Signature timestamp expired: {ageSeconds}s old, max age is {maxAge}s.");
+        }
+
         // 4. Build the payload string that was signed
         var bodyText = Encoding.UTF8.GetString(rawBody);
         var payload = config.PayloadFormat
