@@ -58,6 +58,20 @@ violations to flag:
 - [ ] No half-finished `TODO` comments without a tracking issue.
 - [ ] No new dependencies without justification in the PR body.
 
+### v0.3 invariants
+
+- [ ] **`/metrics` must remain unauthenticated.** Any PR that adds `[Authorize]`
+      or otherwise gates `/metrics` is wrong — the threat model assumes metrics
+      are not secrets.
+- [ ] **`captureOnly` events must rest at `Status = Captured`.** If a PR
+      makes capture-only events transition to `Received` or `Forwarded`
+      without an explicit replay, that's a regression.
+- [ ] **Replay body overrides must not mutate the stored event.** The
+      `WebhookEvent.Body` bytes are immutable across replays. Only
+      `LastReplayWithEditedBody` and replay-stat fields update.
+- [ ] **`HOOKVAULT_NO_AUTH` must log a Warning.** A silent auth bypass is
+      a footgun. The startup line is the only mitigation.
+
 ### Security (high-level — the security-reviewer agent does the deep pass)
 
 - [ ] No secrets / API keys / connection strings hard-coded.

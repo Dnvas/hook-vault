@@ -36,6 +36,13 @@ in under a minute.
    replay captured events.
 6. Replays events asynchronously via a background worker with retry logic and
    exponential backoff.
+7. Optionally exposes a Prometheus scraping endpoint at `/metrics`
+   (unauthenticated; metrics are operational data).
+8. Supports a per-provider "capture-only" mode (`captureOnly: true`)
+   that persists events without forwarding, with the resting state
+   `EventStatus.Captured`.
+9. Supports body-edit replay: tweak the captured payload in the UI
+   and replay with the edited body without mutating the stored event.
 
 ## Core design principles
 
@@ -60,6 +67,7 @@ startup; dynamically registers ingest routes.
       "name": "stripe",
       "path": "/stripe",
       "forwardUrl": "http://host.docker.internal:54321/functions/v1/stripe-webhook",
+      "captureOnly": false,
       "validation": {
         "algorithm": "hmac-sha256",
         "secretEnvVar": "STRIPE_WEBHOOK_SECRET",
@@ -85,8 +93,13 @@ Field descriptions:
 - `name` — human-readable provider label, used for filtering and display
 - `path` — ingest route registered dynamically (POST /api/ingest/{path})
 - `forwardUrl` — where to proxy the event in the local dev environment
+- `captureOnly` — boolean (default `false`). When `true`, the event is
+  persisted with status `Captured` and **not** forwarded. Users can
+  trigger replays manually whenever the downstream is ready.
 - `validation` — nullable; when null, skip validation and just capture + forward
-- `validation.algorithm` — HMAC algorithm (`hmac-sha256`, `hmac-sha512`)
+- `validation.algorithm` — HMAC algorithm (`hmac-sha1`, `hmac-sha256` (default),
+  `hmac-sha512`). SHA-1 is for legacy schemes (GitHub `X-Hub-Signature`,
+  Twitter, some Eventbrite providers).
 - `validation.secretEnvVar` — env var name holding the secret
   (**not** the secret itself — secrets never go in the config file)
 - `validation.signatureHeader` — request header containing the signature
@@ -197,9 +210,31 @@ Both are JWT-protected via `[Authorize]` on `EventsController`.
   "providers": ["stripe", "resend"],
   "database": "sqlite",
   "eventCount": 142,
-  "oldestEvent": "2026-05-10T08:30:00Z"
+  "oldestEvent": "2026-05-10T08:30:00Z",
+  "retention": {
+    "maxEvents": 10000,
+    "retentionDays": 7,
+    "lastSweepAt": "2026-05-16T13:00:00Z",
+    "lastSweepDeleted": 3
+  }
 }
 ```
+
+`retention` is `null` when no caps are configured.
+
+## Metrics endpoint (public, no auth)
+
+`GET /metrics` returns Prometheus-format text with both built-in
+AspNetCore HTTP metrics and HookVault's custom instruments:
+
+- `hookvault_events_total{provider, status}` — counter
+- `hookvault_replays_total{outcome}` — counter
+- `hookvault_forward_duration_seconds{provider, outcome}` — histogram
+- `hookvault_retention_deleted_total{reason}` — counter
+- `hookvault_signature_validation_total{provider, result}` — counter
+
+Unauthenticated by design — metrics are operational data, not secrets.
+The threat model assumes HookVault is not exposed to the public internet.
 
 ## Management API — JWT protected
 
@@ -211,6 +246,13 @@ Both are JWT-protected via `[Authorize]` on `EventsController`.
 - `POST /api/events/replay-failed` — bulk replay all failed events.
 - `DELETE /api/events` — clear all captured events
   (optional `?provider=stripe` filter).
+
+### Auth opt-out
+
+`HOOKVAULT_NO_AUTH=true` disables JWT enforcement on the management API.
+A loud startup warning is logged. Intended for single-user local dev
+where the listener is bound to `127.0.0.1`. Do not enable in any
+environment where the listener is reachable from outside the host.
 
 ## WebhookEvent entity fields
 
@@ -235,7 +277,7 @@ Both are JWT-protected via `[Authorize]` on `EventsController`.
 | LastError            | string?             | yes      |                                |
 
 `EventStatus`: `Received`, `Forwarding`, `Forwarded`, `ForwardFailed`,
-`Replaying`, `ReplayFailed`.
+`Replaying`, `ReplayFailed`, `Captured`.
 
 ## Example provider configs (`/examples/`)
 
@@ -396,3 +438,17 @@ ui/src/
 - `useInvalidateEvents` invalidates **both** `['events']` (list) and
   `['event']` (all detail views). Without the second key, the detail panel
   does not refresh after the replay worker transitions a status.
+
+### ✅ Phase 7 — Hardening sprint (DONE, v0.2.0)
+
+Three merged PRs closing the post-Phase-6 review gaps:
+- PR #17 — correctness bugs (SSE fan-out, bytes body, EF migrations, …)
+- PR #18 — security hardening (JWT entropy, body cap, header redaction, …)
+- PR #19 — architecture + OSS readiness (retention worker, Svix scheme, dedup, GHCR, …)
+
+### ✅ Phase 8 — Polish + ergonomics + distribution (DONE, v0.3.0)
+
+Three merged PRs:
+- PR v0.3-1 — polish (auth opt-out, search pagination, retention surfacing)
+- PR v0.3-2 — ergonomics (capture-only mode, in-UI body edit, hmac-sha1)
+- PR v0.3-3 — distribution (Prometheus /metrics, multi-arch Docker, agent files committed)

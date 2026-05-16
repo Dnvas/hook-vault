@@ -34,6 +34,43 @@ Authoritative reference for how code in this repo is written.
 - **`IHttpClientFactory` always.** Register with `AddHttpClient("name")`, resolve
   via `factory.CreateClient("name")`. Never `new HttpClient()` — it leaks sockets.
 
+### Observability (OpenTelemetry)
+
+- All custom metrics go through `HookVault.Observability.HookVaultMeter`
+  (singleton). Instruments exposed as properties: `EventsTotal`,
+  `ReplaysTotal`, `ForwardDurationSeconds`, `RetentionDeletedTotal`,
+  `SignatureValidationTotal`.
+- Meter name `"HookVault"` matches `AddMeter(...)` in the OpenTelemetry
+  registration. New instruments should be added as properties on
+  `HookVaultMeter`; do NOT create new `Meter` instances directly.
+- `/metrics` endpoint is mapped with `.AllowAnonymous()` and lives
+  outside the `[Authorize]` pipeline.
+
+### Conditional authorisation bypass
+
+`HOOKVAULT_NO_AUTH=true` activates a permissive default + fallback
+authorization policy:
+
+```csharp
+options.DefaultPolicy = new AuthorizationPolicyBuilder()
+    .RequireAssertion(_ => true)
+    .Build();
+options.FallbackPolicy = options.DefaultPolicy;
+```
+
+The JwtBearer scheme stays registered so callers that DO present a
+token still authenticate normally. A loud `LogWarning` is emitted at
+startup when the flag is on.
+
+### Replay queue jobs
+
+`ReplayQueue` carries `ReplayJob(Guid EventId, byte[]? BodyOverride)`,
+not bare `Guid`s. When `BodyOverride` is non-null, `ReplayWorker` passes
+those bytes to `EventForwarder.SendAsync(evt, body, ct)` instead of
+`evt.Body`. The stored event is never mutated — only the in-flight
+forward sees the edited body. `LastReplayWithEditedBody` on the entity
+flags the most recent replay attempt for UI visibility.
+
 ## BackgroundService and scoped services
 
 `BackgroundService` is registered as a singleton (via `AddHostedService`), but
