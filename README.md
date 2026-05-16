@@ -2,6 +2,11 @@
 
 > Capture, inspect, and replay webhooks during local development.
 
+> ⚠️ **Do not expose HookVault to the public internet.** HookVault is a
+> local development tool with permissive auth defaults; it expects a
+> trusted network. For internet-facing webhook capture, use a hosted
+> service.
+
 HookVault is a provider-agnostic webhook proxy for local dev. Drop it into your
 docker-compose, point your provider's webhook URL at it, and get full capture,
 inspection, and replay — no hardcoded provider logic, no external services, no
@@ -88,6 +93,29 @@ Later — via Management API or Swagger UI:
 HookVault is a **transparent pass-through proxy**. Your app receives the webhook
 exactly as it came from the provider — HookVault just records everything along
 the way.
+
+## Why HookVault vs alternatives
+
+| | HookVault | ngrok inspect | webhook.site | smee.io |
+|---|:---:|:---:|:---:|:---:|
+| Captures the request body | ✓ | ✓ | ✓ | ✓ |
+| Replays captured events on demand | ✓ | — | ✓ | — |
+| Validates HMAC signatures from config | ✓ | — | — | — |
+| Forwards to your local stack | ✓ | ✓ | — | ✓ |
+| Runs locally — no third party sees data | ✓ | partial | — | — |
+| Provider-agnostic via JSON config | ✓ | — | — | — |
+| Multiple webhook providers in one container | ✓ | — | — | — |
+
+HookVault's niche is **provider-agnostic, local-only capture with
+config-driven HMAC validation and replay**. It's the only tool in this
+list where your provider secrets, captured payloads, and validation
+debug output never leave your machine.
+
+## Screenshots
+
+![Event list and detail view](docs/img/screenshot-events.png)
+
+![Inspecting a webhook payload](docs/img/screenshot-detail.png)
 
 ## Configuration
 
