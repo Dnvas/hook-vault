@@ -17,6 +17,7 @@ public class IngestController(
     EventRepository repo,
     EventForwarder forwarder,
     EventNotifier notifier,
+    IWebHostEnvironment environment,
     ILogger<IngestController> logger) : ControllerBase
 {
     private static readonly HashSet<string> SensitiveHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -64,7 +65,15 @@ public class IngestController(
         {
             var result = validator.Validate(config.Validation, rawBody, Request.Headers);
             signatureValid = result.IsValid;
-            validationDetails = JsonSerializer.Serialize(result,
+
+            // Redact computedSignature outside Development unless explicitly opted in.
+            // Exposing (payload, computed) pairs gives an attacker oracle data;
+            // default off in production.
+            var resultForSerialization = ShouldExposeComputedSignature(environment)
+                ? result
+                : result with { ComputedSignature = "[redacted]" };
+
+            validationDetails = JsonSerializer.Serialize(resultForSerialization,
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
             if (!result.IsValid)
@@ -101,5 +110,13 @@ public class IngestController(
             signatureValid,
             status = evt.Status.ToString(),
         });
+    }
+
+    private static bool ShouldExposeComputedSignature(IWebHostEnvironment env)
+    {
+        var optIn = Environment.GetEnvironmentVariable("HOOKVAULT_EXPOSE_COMPUTED_SIGNATURE");
+        if (string.Equals(optIn, "true", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return env.IsDevelopment();
     }
 }
