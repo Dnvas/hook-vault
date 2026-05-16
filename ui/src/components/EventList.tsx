@@ -116,7 +116,9 @@ export function EventList({
       {data && (
         <div className="px-3 py-1.5 border-t border-slate-700/60 shrink-0">
           <span className="text-xs text-slate-700 font-mono">
-            {data.total} event{data.total !== 1 ? 's' : ''}
+            {data.totalApproximate
+              ? `${events.length} shown — refine to count exactly`
+              : `${data.total ?? 0} event${(data.total ?? 0) !== 1 ? 's' : ''}`}
           </span>
         </div>
       )}

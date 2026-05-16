@@ -40,9 +40,10 @@ export interface ValidationDetails {
 
 export interface ListEventsResponse {
   items: EventSummary[]
-  total: number
+  total: number | null
   limit: number
   offset: number
+  totalApproximate: boolean
 }
 
 export interface HealthResponse {

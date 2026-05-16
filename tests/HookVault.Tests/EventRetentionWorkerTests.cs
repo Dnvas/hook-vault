@@ -39,9 +39,11 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
     {
         await SeedEventsAsync(20, DateTimeOffset.UtcNow);
 
+        var stats = new RetentionStats { MaxEvents = 5 };
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            stats,
             maxEvents: 5,
             retention: null);
 
@@ -59,9 +61,11 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
         await SeedEventsAsync(5, now.AddDays(-2));       // older than 1 day → deleted
         await SeedEventsAsync(3, now.AddMinutes(-30));   // fresh → kept
 
+        var stats = new RetentionStats { Retention = TimeSpan.FromDays(1) };
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            stats,
             maxEvents: null,
             retention: TimeSpan.FromDays(1));
 
@@ -77,9 +81,11 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
     {
         await SeedEventsAsync(10, DateTimeOffset.UtcNow);
 
+        var stats = new RetentionStats();
         var worker = new EventRetentionWorker(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<EventRetentionWorker>.Instance,
+            stats,
             maxEvents: null,
             retention: null);
 
@@ -88,6 +94,27 @@ public sealed class EventRetentionWorkerTests : IAsyncLifetime
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HookVaultDbContext>();
         Assert.Equal(10, await db.Events.CountAsync());
+    }
+
+    [Fact]
+    public async Task RunOnce_RecordsSweepStats()
+    {
+        await SeedEventsAsync(20, DateTimeOffset.UtcNow);
+        var stats = new RetentionStats { MaxEvents = 5 };
+
+        var worker = new EventRetentionWorker(
+            _services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<EventRetentionWorker>.Instance,
+            stats,
+            maxEvents: 5,
+            retention: null);
+
+        Assert.Null(stats.LastSweepAt);
+
+        await worker.RunOnceAsync(CancellationToken.None);
+
+        Assert.NotNull(stats.LastSweepAt);
+        Assert.Equal(15, stats.LastSweepDeleted);
     }
 
     private async Task SeedEventsAsync(int count, DateTimeOffset baseTime)

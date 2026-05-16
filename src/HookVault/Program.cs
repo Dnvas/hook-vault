@@ -76,10 +76,24 @@ builder.Services.AddSingleton<EventNotifier>();
 
 // Hosted service: BackgroundService started on app start, stopped on graceful shutdown.
 builder.Services.AddHostedService<ReplayWorker>();
+
+// Singleton: registered before the worker so the hosted-service factory can resolve it.
+builder.Services.AddSingleton(_ =>
+{
+    var maxEvents = int.TryParse(Environment.GetEnvironmentVariable("HOOKVAULT_MAX_EVENTS"), out var m) && m > 0 ? m : (int?)null;
+    var days = int.TryParse(Environment.GetEnvironmentVariable("HOOKVAULT_RETENTION_DAYS"), out var d) && d > 0 ? d : (int?)null;
+    return new HookVault.Services.RetentionStats
+    {
+        MaxEvents = maxEvents,
+        Retention = days is { } x ? TimeSpan.FromDays(x) : null,
+    };
+});
+
 builder.Services.AddHostedService(sp =>
     HookVault.Services.EventRetentionWorker.FromEnvironment(
         sp.GetRequiredService<IServiceScopeFactory>(),
-        sp.GetRequiredService<ILogger<HookVault.Services.EventRetentionWorker>>()));
+        sp.GetRequiredService<ILogger<HookVault.Services.EventRetentionWorker>>(),
+        sp.GetRequiredService<HookVault.Services.RetentionStats>()));
 
 // --- Authentication / Authorisation ---
 // JwtBearer validates the Bearer token on every request. Controllers that don't
@@ -111,7 +125,28 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// HOOKVAULT_NO_AUTH=true disables [Authorize] enforcement. The JwtBearer scheme
+// stays registered so callers that *do* present a token (e.g. SSE clients) still
+// authenticate, but the default policy passes for everyone.
+var noAuth = string.Equals(
+    Environment.GetEnvironmentVariable("HOOKVAULT_NO_AUTH"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
+
+if (noAuth)
+{
+    builder.Services.AddAuthorization(options =>
+    {
+        options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => true)
+            .Build();
+        options.FallbackPolicy = options.DefaultPolicy;
+    });
+}
+else
+{
+    builder.Services.AddAuthorization();
+}
 
 // --- ASP.NET Core ---
 // InvalidModelStateResponseFactory maps automatic model-binding failures (e.g. a string
@@ -150,6 +185,14 @@ if (app.Environment.IsDevelopment())
     var uiToken = JwtTokenGenerator.Mint(jwtOptions, "ui", TimeSpan.FromHours(1));
     app.Logger.LogInformation(
         "HookVault UI → http://localhost:7777/?token={Token}", uiToken);
+}
+
+if (noAuth)
+{
+    app.Logger.LogWarning(
+        "HOOKVAULT_NO_AUTH=true: the management API is unauthenticated. " +
+        "Anyone who can reach this listener can read, replay, and delete events. " +
+        "Make sure HookVault is bound to 127.0.0.1 only, or remove this flag.");
 }
 
 // --- Auto-migrate DB on startup ---

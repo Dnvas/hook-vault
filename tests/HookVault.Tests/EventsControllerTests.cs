@@ -394,4 +394,34 @@ public sealed class EventsControllerTests : IAsyncLifetime
         Assert.Single(body.Items);
         Assert.Equal(1, body.Total);
     }
+
+    [Fact]
+    public async Task List_NoBodyFilter_ReturnsNumericTotal()
+    {
+        await SeedAsync(NewEvent("stripe"), NewEvent("stripe"));
+
+        var client = AuthedClient();
+        var response = await client.GetAsync("/api/events");
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, payload.GetProperty("total").GetInt32());
+        Assert.False(payload.GetProperty("totalApproximate").GetBoolean());
+    }
+
+    [Fact]
+    public async Task List_BodyFilter_ReturnsNullTotalWithApproximateFlag()
+    {
+        await SeedAsync(
+            NewEvent("stripe", body: """{"id":"evt_match_aaa"}"""),
+            NewEvent("stripe", body: """{"id":"evt_other"}"""));
+
+        var client = AuthedClient();
+        var response = await client.GetAsync("/api/events?bodyContains=match");
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("total").ValueKind);
+        Assert.True(payload.GetProperty("totalApproximate").GetBoolean());
+    }
 }
