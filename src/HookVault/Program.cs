@@ -54,6 +54,8 @@ builder.Services.AddScoped<EventRepository>();
 // Transient: each scheme is stateless; new instance each time is fine.
 builder.Services.AddTransient<HookVault.Services.Schemes.IIngestSignatureScheme,
                               HookVault.Services.Schemes.SingleHeaderHmacScheme>();
+builder.Services.AddTransient<HookVault.Services.Schemes.IIngestSignatureScheme,
+                              HookVault.Services.Schemes.SvixHmacScheme>();
 
 // Transient: SignatureValidator is stateless; new instance each time is fine.
 builder.Services.AddTransient<HookVaultSignatureValidator>();
