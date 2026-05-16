@@ -55,8 +55,8 @@ public sealed class MaxBodySizeTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var body = new string('x', 512);
-        var response = await client.PostAsync("/api/ingest/open",
-            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/api/ingest/open", content);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
@@ -65,14 +65,25 @@ public sealed class MaxBodySizeTests : IAsyncLifetime
     {
         var client = _factory.CreateClient();
         var body = new string('x', 2048); // > 1024 cap
-        var response = await client.PostAsync("/api/ingest/open",
-            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/api/ingest/open", content);
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
     }
 
     private sealed class OkHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        private HttpResponseMessage? _response;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
+        {
+            _response = new HttpResponseMessage(HttpStatusCode.OK);
+            return Task.FromResult(_response);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _response?.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }

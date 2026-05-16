@@ -151,7 +151,18 @@ public sealed class ComputedSignatureRedactionTests : IAsyncLifetime
 
     private sealed class OkHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        private HttpResponseMessage? _response;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
+        {
+            _response = new HttpResponseMessage(HttpStatusCode.OK);
+            return Task.FromResult(_response);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _response?.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }
