@@ -15,9 +15,11 @@ public sealed class MaxBodySizeMiddleware(RequestDelegate next, ILogger<MaxBodyS
             context.Items[RawBodyMiddleware.RawBodyKey] is byte[] body &&
             body.Length > maxBytes)
         {
+            // Strip CR/LF from the user-controlled path so it can't forge new log lines.
+            var path = context.Request.Path.Value?.Replace('\n', '_').Replace('\r', '_');
             logger.LogWarning(
                 "Rejected oversize ingest: {Bytes}B > cap {Cap}B on {Path}",
-                body.Length, maxBytes, context.Request.Path);
+                body.Length, maxBytes, path);
 
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
             await context.Response.WriteAsJsonAsync(new
