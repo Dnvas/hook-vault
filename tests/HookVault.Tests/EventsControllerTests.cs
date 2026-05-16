@@ -62,18 +62,21 @@ public sealed class EventsControllerTests : IAsyncLifetime
 
     private static WebhookEvent NewEvent(string provider = "stripe",
         EventStatus status = EventStatus.Forwarded,
-        DateTimeOffset? receivedAt = null)
+        DateTimeOffset? receivedAt = null,
+        string? body = null,
+        string? providerEventId = null)
     => new()
     {
         Provider = provider,
         Path = $"/api/ingest/{provider}",
         Headers = "{\"X-Test\":[\"yes\"]}",
-        Body = System.Text.Encoding.UTF8.GetBytes("{}"),
+        Body = System.Text.Encoding.UTF8.GetBytes(body ?? "{}"),
         ReceivedAt = receivedAt ?? DateTimeOffset.UtcNow,
         ForwardUrl = "http://localhost/forward",
         ForwardStatusCode = 200,
         SignatureValid = true,
         Status = status,
+        ProviderEventId = providerEventId,
     };
 
     [Fact]
@@ -363,5 +366,32 @@ public sealed class EventsControllerTests : IAsyncLifetime
         var response = await _factory.CreateClient().DeleteAsync("/api/events?confirm=true");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task List_BodyContains_FiltersByBodySubstring()
+    {
+        await SeedAsync(
+            NewEvent(body: """{"id":"evt_match_3abc"}"""),
+            NewEvent(body: """{"id":"evt_other_xyz"}"""));
+
+        var body = await AuthedClient().GetFromJsonAsync<ListEventsResponse>("/api/events?bodyContains=3abc");
+
+        Assert.NotNull(body);
+        Assert.Single(body.Items);
+    }
+
+    [Fact]
+    public async Task List_ProviderEventId_FiltersExact()
+    {
+        await SeedAsync(
+            NewEvent(body: """{"x":1}""", providerEventId: "evt_a"),
+            NewEvent(body: """{"x":2}""", providerEventId: "evt_b"));
+
+        var body = await AuthedClient().GetFromJsonAsync<ListEventsResponse>("/api/events?providerEventId=evt_a");
+
+        Assert.NotNull(body);
+        Assert.Single(body.Items);
+        Assert.Equal(1, body.Total);
     }
 }

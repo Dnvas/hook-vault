@@ -51,6 +51,7 @@ public sealed class EventRepository(HookVaultDbContext db)
 
     public async Task<(List<EventSummary> Items, int Total)> ListSummariesAsync(
         string? provider, string? status, DateTimeOffset? from, DateTimeOffset? to,
+        string? bodyContains = null, string? providerEventId = null,
         int limit = 50, int offset = 0, CancellationToken ct = default)
     {
         var query = db.Events.AsQueryable();
@@ -67,12 +68,32 @@ public sealed class EventRepository(HookVaultDbContext db)
         if (to.HasValue)
             query = query.Where(e => e.ReceivedAt <= to.Value);
 
+        if (!string.IsNullOrEmpty(providerEventId))
+            query = query.Where(e => e.ProviderEventId == providerEventId);
+
+        // total reflects all SQL-filterable predicates; when bodyContains is also
+        // active the count is approximate (pre-body-filter) — acceptable for a dev tool.
         var total = await query.CountAsync(ct);
 
-        var items = await query
+        // Body is a BLOB column; EF Core's SQLite provider cannot translate
+        // Encoding.UTF8.GetString(e.Body).Contains(...) to SQL. Over-fetch then
+        // post-filter in memory so body search still respects the other SQL filters.
+        var rawList = await query
             .OrderByDescending(e => e.ReceivedAt)
             .Skip(offset)
-            .Take(limit)
+            .Take(bodyContains is null ? limit : limit * 4)
+            .ToListAsync(ct);
+
+        if (!string.IsNullOrEmpty(bodyContains))
+        {
+            rawList = rawList
+                .Where(e => System.Text.Encoding.UTF8.GetString(e.Body)
+                    .Contains(bodyContains, StringComparison.OrdinalIgnoreCase))
+                .Take(limit)
+                .ToList();
+        }
+
+        var items = rawList
             .Select(e => new EventSummary(
                 e.Id,
                 e.Provider,
@@ -82,7 +103,7 @@ public sealed class EventRepository(HookVaultDbContext db)
                 e.ForwardStatusCode,
                 e.ReplayCount,
                 e.ForwardedAt))
-            .ToListAsync(ct);
+            .ToList();
 
         return (items, total);
     }

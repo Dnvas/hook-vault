@@ -23,6 +23,8 @@ public sealed class EventsController(
         [FromQuery] string? status,
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
+        [FromQuery] string? bodyContains,
+        [FromQuery] string? providerEventId,
         [FromQuery] int? limit,
         [FromQuery] int? offset,
         CancellationToken ct)
@@ -39,7 +41,7 @@ public sealed class EventsController(
         var clampedOffset = Math.Max(offset ?? 0, 0);
 
         var (items, total) = await repo.ListSummariesAsync(
-            provider, status, from, to, clampedLimit, clampedOffset, ct);
+            provider, status, from, to, bodyContains, providerEventId, clampedLimit, clampedOffset, ct);
 
         return Ok(new ListEventsResponse(items, total, clampedLimit, clampedOffset));
     }
