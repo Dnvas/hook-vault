@@ -93,13 +93,15 @@ if (!string.IsNullOrEmpty(databaseUrl))
     // can still set the native form (with sslmode, pooling, etc.) directly.
     var npgsqlConnectionString = NormalizePostgresConnectionString(databaseUrl);
     builder.Services.AddDbContext<HookVaultDbContext>(opts =>
-        opts.UseNpgsql(npgsqlConnectionString));
+        opts.UseNpgsql(npgsqlConnectionString)
+            .ConfigureWarnings(SuppressCrossProviderSnapshotWarnings));
 }
 else
 {
     var dbPath = Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "/data/hookvault.db";
     builder.Services.AddDbContext<HookVaultDbContext>(opts =>
-        opts.UseSqlite($"Data Source={dbPath}"));
+        opts.UseSqlite($"Data Source={dbPath}")
+            .ConfigureWarnings(SuppressCrossProviderSnapshotWarnings));
 }
 
 // --- Application Services ---
@@ -288,6 +290,19 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
         app.Logger.LogWarning("Startup sweep: recovered {Count} orphaned Replaying events.", orphaned.Count);
     }
+}
+
+static void SuppressCrossProviderSnapshotWarnings(Microsoft.EntityFrameworkCore.Diagnostics.WarningsConfigurationBuilder w)
+{
+    // HookVault ships one model snapshot but supports both SQLite and Postgres.
+    // The runtime model on the non-snapshot provider legitimately differs in
+    // store types (byte[] -> BLOB vs bytea, string -> TEXT vs text). EF Core's
+    // PendingModelChangesWarning treats this as an error by default since 9.x;
+    // suppress it so MigrateAsync can run instead of throwing on startup. The
+    // canonical migration (BytesBodyAndArrayHeaders) carries its own provider
+    // branch so the on-disk schema converges regardless of which snapshot the
+    // designer file was generated against.
+    w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
 }
 
 static string NormalizePostgresConnectionString(string input)
