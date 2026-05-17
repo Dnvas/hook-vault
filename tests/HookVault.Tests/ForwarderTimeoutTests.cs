@@ -70,7 +70,7 @@ public sealed class ForwarderTimeoutTests
         // Bind a TCP listener but never accept — connect() hangs on most platforms,
         // forcing the request past the kernel-level connect path so the HttpClient
         // timeout (not OS RST) is what cuts the call off.
-        var listener = new TcpListener(System.Net.IPAddress.Loopback, 0);
+        using var listener = new TcpListener(System.Net.IPAddress.Loopback, 0);
         listener.Start();
         var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
 

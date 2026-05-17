@@ -224,9 +224,6 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
             HttpStatusCode.InternalServerError,
             HttpStatusCode.OK);
 
-        var provider = _providers[^1];
-        var meter = provider.GetRequiredService<HookVault.Observability.HookVaultMeter>();
-
         using var listener = new System.Diagnostics.Metrics.MeterListener();
         var retryCount = 0L;
         var successCount = 0L;
