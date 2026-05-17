@@ -32,7 +32,7 @@ namespace HookVault.Migrations
                         SELECT jsonb_object_agg(key, jsonb_build_array(value))::text
                         FROM jsonb_each_text("Headers"::jsonb)
                     )
-                    WHERE "Headers" IS NOT NULL AND "Headers" <> '';
+                    WHERE "Headers" IS NOT NULL AND "Headers" <> '' AND "Headers" <> '{}';
                 """);
 
                 return;
@@ -111,6 +111,7 @@ namespace HookVault.Migrations
         {
             if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
             {
+                // Reverse order of Up: flatten headers first, then revert body type.
                 // Flatten {"k":["v"]} -> {"k":"v"} (takes the first element; safe because
                 // the up-migration always wrapped in a single-element array and no caller
                 // introduces multi-value headers on the old shape).
@@ -120,7 +121,7 @@ namespace HookVault.Migrations
                         SELECT jsonb_object_agg(key, value -> 0)::text
                         FROM jsonb_each("Headers"::jsonb)
                     )
-                    WHERE "Headers" IS NOT NULL AND "Headers" <> '';
+                    WHERE "Headers" IS NOT NULL AND "Headers" <> '' AND "Headers" <> '{}';
                 """);
 
                 migrationBuilder.Sql("""
