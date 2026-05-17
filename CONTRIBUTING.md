@@ -63,6 +63,29 @@ dotnet format
 - **Tests:** real SQLite and real HMAC inputs — no mocks for crypto or the
   database layer
 
+## Database migrations
+
+HookVault names migrations with **zero-padded sequential IDs**
+(`00000000000001_Foo`), not EF Core's default timestamp prefix
+(`20260517123045_Foo`). This keeps ordering deterministic across
+contributors in different timezones and matches the existing files in
+`src/HookVault/Migrations/`.
+
+When you add a new migration:
+
+```bash
+dotnet ef migrations add YourMigrationName --project src/HookVault
+```
+
+Then **rename** the generated `.cs` and `.Designer.cs` files so the prefix
+is `previous + 1`, zero-padded to 14 digits. Update the `[Migration("...")]`
+attribute inside both files to match the new prefix. The model snapshot
+(`HookVaultDbContextModelSnapshot.cs`) does not need to change.
+
+Migrations that change column types or shape **must** branch on
+`migrationBuilder.ActiveProvider` to support both SQLite and PostgreSQL.
+See `00000000000001_BytesBodyAndArrayHeaders.cs` for the canonical example.
+
 ## Commit style
 
 ```
