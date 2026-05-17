@@ -86,14 +86,22 @@ catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundExcept
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (!string.IsNullOrEmpty(databaseUrl))
 {
+    // Heroku / Render / Railway / docker-compose all emit DATABASE_URL in the
+    // postgres://user:pass@host:port/db URI form, but Npgsql's connection-string
+    // parser only accepts the Host=...;Port=... key-value form. Translate when
+    // we detect a URI scheme; pass through anything else verbatim so power users
+    // can still set the native form (with sslmode, pooling, etc.) directly.
+    var npgsqlConnectionString = NormalizePostgresConnectionString(databaseUrl);
     builder.Services.AddDbContext<HookVaultDbContext>(opts =>
-        opts.UseNpgsql(databaseUrl));
+        opts.UseNpgsql(npgsqlConnectionString)
+            .ConfigureWarnings(SuppressCrossProviderSnapshotWarnings));
 }
 else
 {
     var dbPath = Environment.GetEnvironmentVariable("SQLITE_PATH") ?? "/data/hookvault.db";
     builder.Services.AddDbContext<HookVaultDbContext>(opts =>
-        opts.UseSqlite($"Data Source={dbPath}"));
+        opts.UseSqlite($"Data Source={dbPath}")
+            .ConfigureWarnings(SuppressCrossProviderSnapshotWarnings));
 }
 
 // --- Application Services ---
@@ -282,6 +290,45 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
         app.Logger.LogWarning("Startup sweep: recovered {Count} orphaned Replaying events.", orphaned.Count);
     }
+}
+
+static void SuppressCrossProviderSnapshotWarnings(Microsoft.EntityFrameworkCore.Diagnostics.WarningsConfigurationBuilder w)
+{
+    // HookVault ships one model snapshot but supports both SQLite and Postgres.
+    // The runtime model on the non-snapshot provider legitimately differs in
+    // store types (byte[] -> BLOB vs bytea, string -> TEXT vs text). EF Core's
+    // PendingModelChangesWarning treats this as an error by default since 9.x;
+    // suppress it so MigrateAsync can run instead of throwing on startup. The
+    // canonical migration (BytesBodyAndArrayHeaders) carries its own provider
+    // branch so the on-disk schema converges regardless of which snapshot the
+    // designer file was generated against.
+    w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
+}
+
+static string NormalizePostgresConnectionString(string input)
+{
+    // Pass through anything that is not a postgres:// URI — power users may
+    // supply the native Npgsql key=value form directly with sslmode, pooling,
+    // etc., and we should not second-guess that.
+    if (!input.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+        !input.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        return input;
+    }
+
+    var uri = new Uri(input);
+    var userInfo = uri.UserInfo.Split(':', 2);
+
+    var builder = new Npgsql.NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.Port > 0 ? uri.Port : 5432,
+        Username = Uri.UnescapeDataString(userInfo[0]),
+        Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,
+        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+    };
+
+    return builder.ToString();
 }
 
 static TimeSpan ParseForwardTimeoutEnv(ILogger logger)
