@@ -109,3 +109,51 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  postgres-smoke:
+    name: Postgres migration smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate dummy secrets
+        run: |
+          echo "HOOKVAULT_JWT_SECRET=$(openssl rand -hex 32)" >> $GITHUB_ENV
+          echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> $GITHUB_ENV
+
+      - name: Provide a config file for the container
+        # docker-compose.postgres.yml mounts ./hookvault.json read-only.
+        # The repo gitignores hookvault.json so users supply their own;
+        # the example file works as a smoke-test stand-in.
+        run: cp hookvault.example.json hookvault.json
+
+      - name: Boot the Postgres stack
+        run: docker compose -f docker-compose.postgres.yml up -d --build
+
+      - name: Wait for hookvault healthcheck
+        run: |
+          for i in {1..30}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' \
+              $(docker compose -f docker-compose.postgres.yml ps -q hookvault))
+            echo "attempt $i: $status"
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "hookvault never became healthy"
+          docker compose -f docker-compose.postgres.yml logs hookvault
+          exit 1
+
+      - name: Assert /api/health reports postgresql
+        run: |
+          body=$(curl -fsS http://localhost:7777/api/health)
+          echo "$body"
+          echo "$body" | grep -q '"database":"postgresql"'
+          echo "$body" | grep -q '"status":"healthy"'
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.postgres.yml logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.postgres.yml down -v
