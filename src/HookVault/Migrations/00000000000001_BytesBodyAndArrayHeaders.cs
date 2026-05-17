@@ -10,11 +10,39 @@ namespace HookVault.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                // Body: text -> bytea. UTF-8 round-trip is lossless because the SQLite
+                // path stored UTF-8 byte content as TEXT; Postgres did the same via the
+                // default text encoding.
+                migrationBuilder.Sql("""
+                    ALTER TABLE "Events"
+                    ALTER COLUMN "Body" TYPE bytea
+                    USING convert_to("Body", 'UTF8');
+                """);
+
+                // Headers: rewrite {"k":"v"} -> {"k":["v"]} in place. Headers stays text;
+                // only its JSON shape changes. We parse with ::jsonb, build new value
+                // arrays, then cast the result back to text for storage. Single-element
+                // wrapping is correct for every row written prior to this migration —
+                // no code path produces multi-value headers.
+                migrationBuilder.Sql("""
+                    UPDATE "Events"
+                    SET "Headers" = (
+                        SELECT jsonb_object_agg(key, jsonb_build_array(value))::text
+                        FROM jsonb_each_text("Headers"::jsonb)
+                    )
+                    WHERE "Headers" IS NOT NULL AND "Headers" <> '';
+                """);
+
+                return;
+            }
+
             if (migrationBuilder.ActiveProvider != "Microsoft.EntityFrameworkCore.Sqlite")
                 throw new NotSupportedException(
-                    "BytesBodyAndArrayHeaders migration currently only supports SQLite. " +
-                    "Postgres users: please drop and recreate the database. Multi-provider " +
-                    "migration support is tracked for a follow-up PR.");
+                    $"BytesBodyAndArrayHeaders does not support provider '{migrationBuilder.ActiveProvider}'. " +
+                    "Supported providers: Microsoft.EntityFrameworkCore.Sqlite, " +
+                    "Npgsql.EntityFrameworkCore.PostgreSQL.");
 
             // SQLite can't ALTER COLUMN TYPE; recreate the table with the new schema.
             // Body TEXT -> BLOB. Headers stays TEXT (JSON shape changes but type doesn't).
@@ -81,9 +109,34 @@ namespace HookVault.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")
+            {
+                // Flatten {"k":["v"]} -> {"k":"v"} (takes the first element; safe because
+                // the up-migration always wrapped in a single-element array and no caller
+                // introduces multi-value headers on the old shape).
+                migrationBuilder.Sql("""
+                    UPDATE "Events"
+                    SET "Headers" = (
+                        SELECT jsonb_object_agg(key, value -> 0)::text
+                        FROM jsonb_each("Headers"::jsonb)
+                    )
+                    WHERE "Headers" IS NOT NULL AND "Headers" <> '';
+                """);
+
+                migrationBuilder.Sql("""
+                    ALTER TABLE "Events"
+                    ALTER COLUMN "Body" TYPE text
+                    USING convert_from("Body", 'UTF8');
+                """);
+
+                return;
+            }
+
             if (migrationBuilder.ActiveProvider != "Microsoft.EntityFrameworkCore.Sqlite")
                 throw new NotSupportedException(
-                    "BytesBodyAndArrayHeaders migration currently only supports SQLite.");
+                    $"BytesBodyAndArrayHeaders does not support provider '{migrationBuilder.ActiveProvider}'. " +
+                    "Supported providers: Microsoft.EntityFrameworkCore.Sqlite, " +
+                    "Npgsql.EntityFrameworkCore.PostgreSQL.");
 
             migrationBuilder.Sql("PRAGMA foreign_keys = OFF;");
 
