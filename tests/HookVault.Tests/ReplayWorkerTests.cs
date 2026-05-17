@@ -156,6 +156,108 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task NonRetriable4xx_StopsAfterFirstAttempt()
+    {
+        var evt = MakeEvent();
+        await _repo.AddAsync(evt);
+
+        var (worker, queue, handler) = BuildWorker(HttpStatusCode.NotFound);
+        await worker.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(evt.Id);
+
+        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
+        await worker.StopAsync(CancellationToken.None);
+
+        var updated = await FreshFetchAsync(evt.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(EventStatus.ReplayFailed, updated.Status);
+        Assert.Equal(404, updated.ForwardStatusCode);
+        Assert.Equal(1, handler.CallCount); // no retries on non-retriable 4xx
+    }
+
+    [Fact]
+    public async Task Retriable429_TriggersFullRetrySequence()
+    {
+        var evt = MakeEvent();
+        await _repo.AddAsync(evt);
+
+        var (worker, queue, handler) = BuildWorker((HttpStatusCode)429);
+        await worker.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(evt.Id);
+
+        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
+        await worker.StopAsync(CancellationToken.None);
+
+        var updated = await FreshFetchAsync(evt.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(EventStatus.ReplayFailed, updated.Status);
+        Assert.Equal(4, handler.CallCount); // 429 stays retriable → 1 initial + 3 retries
+    }
+
+    [Theory]
+    [InlineData(200, true)]
+    [InlineData(400, false)]
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(404, false)]
+    [InlineData(408, true)]
+    [InlineData(422, false)]
+    [InlineData(425, true)]
+    [InlineData(429, true)]
+    [InlineData(500, true)]
+    [InlineData(502, true)]
+    [InlineData(503, true)]
+    [InlineData(null, true)]
+    public void IsRetriable_MatchesContract(int? status, bool expected)
+    {
+        Assert.Equal(expected, ReplayWorker.IsRetriable(status));
+    }
+
+    [Fact]
+    public async Task RetriableFailureThenSuccess_IncrementsRetryMetric()
+    {
+        var evt = MakeEvent();
+        await _repo.AddAsync(evt);
+
+        var (worker, queue, _) = BuildWorker(
+            HttpStatusCode.InternalServerError,
+            HttpStatusCode.InternalServerError,
+            HttpStatusCode.OK);
+
+        using var listener = new System.Diagnostics.Metrics.MeterListener();
+        var retryCount = 0L;
+        var successCount = 0L;
+        listener.InstrumentPublished = (inst, l) =>
+        {
+            if (inst.Meter.Name == HookVault.Observability.HookVaultMeter.MeterName
+                && inst.Name == "hookvault_replays_total")
+                l.EnableMeasurementEvents(inst);
+        };
+        listener.SetMeasurementEventCallback<long>((inst, value, tags, _) =>
+        {
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "outcome" && tag.Value is string s)
+                {
+                    if (s == "retry") Interlocked.Add(ref retryCount, value);
+                    else if (s == "success") Interlocked.Add(ref successCount, value);
+                }
+            }
+        });
+        listener.Start();
+
+        await worker.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(evt.Id);
+
+        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
+        await worker.StopAsync(CancellationToken.None);
+        listener.Dispose();
+
+        Assert.Equal(2, Interlocked.Read(ref retryCount));
+        Assert.Equal(1, Interlocked.Read(ref successCount));
+    }
+
+    [Fact]
     public async Task AllAttemptsFail_SetsReplayFailed()
     {
         var evt = MakeEvent();

@@ -115,7 +115,11 @@ builder.Services.AddScoped<EventForwarder>();
 
 // HttpClient: IHttpClientFactory manages pooled HttpMessageHandlers to avoid socket exhaustion.
 // This is the .NET best-practice replacement for newing up HttpClient directly.
-builder.Services.AddHttpClient("forwarder");
+// Timeout defaults to 30s (configurable via HOOKVAULT_FORWARD_TIMEOUT_SECONDS, clamped 1-300);
+// the .NET default of 100s blocks the single-reader replay worker for ~7 minutes per
+// unreachable target across 4 attempts.
+var forwardTimeout = ParseForwardTimeoutEnv(bootstrapLogger);
+builder.Services.AddHttpClient("forwarder", c => c.Timeout = forwardTimeout);
 
 // Singleton: owns the Channel<Guid> for the application lifetime.
 builder.Services.AddSingleton<ReplayQueue>();
@@ -278,6 +282,35 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
         app.Logger.LogWarning("Startup sweep: recovered {Count} orphaned Replaying events.", orphaned.Count);
     }
+}
+
+static TimeSpan ParseForwardTimeoutEnv(ILogger logger)
+{
+    const int defaultSeconds = 30;
+    const int minSeconds = 1;
+    const int maxSeconds = 300;
+
+    var raw = Environment.GetEnvironmentVariable("HOOKVAULT_FORWARD_TIMEOUT_SECONDS");
+    if (string.IsNullOrWhiteSpace(raw))
+        return TimeSpan.FromSeconds(defaultSeconds);
+
+    if (!int.TryParse(raw, out var parsed))
+    {
+        logger.LogWarning(
+            "HOOKVAULT_FORWARD_TIMEOUT_SECONDS='{Raw}' is not a valid integer; using default {Default}s.",
+            raw, defaultSeconds);
+        return TimeSpan.FromSeconds(defaultSeconds);
+    }
+
+    if (parsed < minSeconds || parsed > maxSeconds)
+    {
+        logger.LogWarning(
+            "HOOKVAULT_FORWARD_TIMEOUT_SECONDS={Parsed} is outside [{Min}, {Max}]; using default {Default}s.",
+            parsed, minSeconds, maxSeconds, defaultSeconds);
+        return TimeSpan.FromSeconds(defaultSeconds);
+    }
+
+    return TimeSpan.FromSeconds(parsed);
 }
 
 static async Task BackfillMigrationHistoryAsync(HookVaultDbContext db)

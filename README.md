@@ -252,6 +252,27 @@ header. The query-string fallback applies to `/api/events/stream` only.
 purges. Without it, the request returns `400` with code `delete_confirm_required`
 and no events are touched.
 
+### Replay behaviour
+
+Replays run on a background worker with a fixed retry schedule of
+`[1s, 2s, 4s] × 3` (one initial attempt plus three retries). Retry
+eligibility distinguishes transient failures from terminal ones:
+
+- **Retriable:** 5xx responses, network errors, request timeouts, plus
+  408 (Request Timeout), 425 (Too Early), and 429 (Too Many Requests).
+- **Non-retriable:** all other 4xx responses — they signal a configuration
+  or auth problem rather than a transient failure, so replay short-circuits
+  to `ReplayFailed` after the first attempt instead of burning the full
+  backoff sequence.
+
+Retry timing for retriable failures is unchanged.
+
+### Forwarder environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `HOOKVAULT_FORWARD_TIMEOUT_SECONDS` | no | Per-request timeout for forwarded webhooks. Default `30`, clamped to `[1, 300]`. Invalid or out-of-range values log a warning at startup and fall back to the default. |
+
 ### JWT environment variables
 
 | Variable | Required | Description |
@@ -293,7 +314,9 @@ condition: service_healthy` target for downstream services.
 `GET /metrics` returns Prometheus-format metrics:
 
 - `hookvault_events_total{provider, status}`
-- `hookvault_replays_total{outcome}`
+- `hookvault_replays_total{outcome}` — `outcome` is one of `success`,
+  `retry` (incremented once per non-final retriable failure before the
+  next backoff delay), or `exhausted`
 - `hookvault_forward_duration_seconds{provider, outcome}`
 - `hookvault_retention_deleted_total{reason}`
 - `hookvault_signature_validation_total{provider, result}`
