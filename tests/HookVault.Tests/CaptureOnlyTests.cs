@@ -7,6 +7,7 @@ using HookVault.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace HookVault.Tests;
 
@@ -69,6 +70,61 @@ public sealed class CaptureOnlyTests : IAsyncLifetime
         Assert.Equal(EventStatus.Captured, stored.Status);
         Assert.Equal(0, _forwardHandler.CallCount);
         Assert.Null(stored.ForwardedAt);
+    }
+
+    [Fact]
+    public void Load_CaptureOnlyProvider_WithEmptyForwardUrl_Succeeds()
+    {
+        var configPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(configPath, """
+                {
+                  "providers": [
+                    { "name": "stripe", "path": "/stripe", "captureOnly": true }
+                  ]
+                }
+                """);
+            Environment.SetEnvironmentVariable("HOOKVAULT_CONFIG_PATH", configPath);
+
+            var logger = LoggerFactory.Create(b => { }).CreateLogger("test");
+            var options = HookVaultOptions.Load(logger);
+
+            Assert.Single(options.Providers);
+            Assert.True(options.Providers[0].CaptureOnly);
+            Assert.Equal(string.Empty, options.Providers[0].ForwardUrl);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOOKVAULT_CONFIG_PATH", null);
+            File.Delete(configPath);
+        }
+    }
+
+    [Fact]
+    public void Load_NonCaptureOnlyProvider_WithEmptyForwardUrl_Throws()
+    {
+        var configPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(configPath, """
+                {
+                  "providers": [
+                    { "name": "stripe", "path": "/stripe" }
+                  ]
+                }
+                """);
+            Environment.SetEnvironmentVariable("HOOKVAULT_CONFIG_PATH", configPath);
+
+            var logger = LoggerFactory.Create(b => { }).CreateLogger("test");
+            var ex = Assert.Throws<InvalidOperationException>(() => HookVaultOptions.Load(logger));
+            Assert.Contains("forwardUrl", ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOOKVAULT_CONFIG_PATH", null);
+            File.Delete(configPath);
+        }
     }
 
     private sealed class CountingHandler : HttpMessageHandler

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 
@@ -6,6 +7,11 @@ namespace HookVault.Auth;
 public sealed record JwtOptions(string Secret, string Issuer, string Audience)
 {
     public const int MinimumSecretBytes = 48;
+
+    public static JwtOptions Ephemeral() =>
+        new(Convert.ToBase64String(RandomNumberGenerator.GetBytes(MinimumSecretBytes)),
+            "hookvault",
+            "hookvault");
 
     public static JwtOptions FromConfiguration(IConfiguration config)
     {

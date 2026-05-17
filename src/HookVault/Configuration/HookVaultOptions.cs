@@ -4,6 +4,13 @@ namespace HookVault.Configuration;
 
 public sealed class HookVaultOptions
 {
+    private static readonly HashSet<string> AllowedAlgorithms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "hmac-sha1",
+        "hmac-sha256",
+        "hmac-sha512",
+    };
+
     public IReadOnlyList<ProviderConfig> Providers { get; init; } = [];
 
     public static HookVaultOptions Load(ILogger logger)
@@ -17,8 +24,21 @@ public sealed class HookVaultOptions
                 "Mount a hookvault.json file or set HOOKVAULT_CONFIG_PATH.", configPath);
 
         var json = File.ReadAllText(configPath);
-        var options = JsonSerializer.Deserialize<HookVaultOptions>(json, JsonOptions)
-            ?? throw new InvalidOperationException("Config file deserialized to null.");
+        HookVaultOptions? options;
+        try
+        {
+            options = JsonSerializer.Deserialize<HookVaultOptions>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to parse HookVault config '{configPath}' at line {ex.LineNumber + 1}, " +
+                $"column {ex.BytePositionInLine + 1}: {ex.Message}", ex);
+        }
+
+        if (options is null)
+            throw new InvalidOperationException(
+                $"HookVault config '{configPath}' deserialized to null.");
 
         Validate(options);
         logger.LogInformation("Loaded {Count} provider(s): {Names}",
@@ -46,10 +66,26 @@ public sealed class HookVaultOptions
                 throw new InvalidOperationException("A provider is missing a 'name'.");
             if (string.IsNullOrWhiteSpace(p.Path))
                 throw new InvalidOperationException($"Provider '{p.Name}' is missing a 'path'.");
-            if (string.IsNullOrWhiteSpace(p.ForwardUrl))
-                throw new InvalidOperationException($"Provider '{p.Name}' is missing a 'forwardUrl'.");
+            if (!p.CaptureOnly && string.IsNullOrWhiteSpace(p.ForwardUrl))
+                throw new InvalidOperationException(
+                    $"Provider '{p.Name}' is missing a 'forwardUrl' " +
+                    "(required unless 'captureOnly' is true).");
             if (!paths.Add(p.Path))
                 throw new InvalidOperationException($"Duplicate provider path '{p.Path}'.");
+
+            if (p.Validation is { } v)
+            {
+                if (string.IsNullOrWhiteSpace(v.Algorithm) || !AllowedAlgorithms.Contains(v.Algorithm))
+                    throw new InvalidOperationException(
+                        $"Provider '{p.Name}': validation.algorithm '{v.Algorithm}' is not supported. " +
+                        "Use one of: hmac-sha1, hmac-sha256, hmac-sha512.");
+                if (string.IsNullOrWhiteSpace(v.SignatureHeader))
+                    throw new InvalidOperationException(
+                        $"Provider '{p.Name}': validation.signatureHeader is required.");
+                if (string.IsNullOrWhiteSpace(v.SecretEnvVar))
+                    throw new InvalidOperationException(
+                        $"Provider '{p.Name}': validation.secretEnvVar is required.");
+            }
         }
     }
 

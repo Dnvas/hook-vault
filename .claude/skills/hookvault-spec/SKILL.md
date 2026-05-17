@@ -238,14 +238,27 @@ The threat model assumes HookVault is not exposed to the public internet.
 
 ## Management API — JWT protected
 
-- `GET /api/events` — list events; filterable by provider, status, dateFrom,
-  dateTo. Paginated with limit/offset.
+- `GET /api/events` — list events; filterable by `provider`, `status`,
+  `from`, `to`, `bodyContains` (case-insensitive substring on raw body),
+  and `providerEventId` (exact match on the extracted provider event id).
+  Paginated with `limit`/`offset`.
 - `GET /api/events/{id}` — full event detail including headers, body,
   validation debug info, forward result.
+- `GET /api/events/stream` — Server-Sent Events stream of new captures
+  and status transitions, used by the React UI. Because the browser
+  `EventSource` API cannot set an `Authorization` header, this route
+  accepts the JWT via the `?token=<jwt>` query string in addition to
+  the normal bearer header. The query-string fallback is scoped to
+  this route only (see `JwtBearerEvents.OnMessageReceived` in
+  `Program.cs`).
 - `POST /api/events/{id}/replay` — enqueue single event for replay.
+  Optional JSON body `{ "body": "..." }` replays with the supplied
+  payload without mutating the stored event.
 - `POST /api/events/replay-failed` — bulk replay all failed events.
-- `DELETE /api/events` — clear all captured events
-  (optional `?provider=stripe` filter).
+- `DELETE /api/events` — clear captured events
+  (optional `?provider=stripe` filter). Requires `?confirm=true`;
+  without it, returns `400` with code `delete_confirm_required`
+  and deletes nothing.
 
 ### Auth opt-out
 
@@ -253,6 +266,31 @@ The threat model assumes HookVault is not exposed to the public internet.
 A loud startup warning is logged. Intended for single-user local dev
 where the listener is bound to `127.0.0.1`. Do not enable in any
 environment where the listener is reachable from outside the host.
+
+When `HOOKVAULT_NO_AUTH=true`, `HOOKVAULT_JWT_SECRET` becomes optional.
+If unset, `JwtOptions.Ephemeral()` generates a 48-byte random key per
+process — the JWT bearer scheme stays registered so callers presenting
+a token (e.g. SSE clients using the startup-printed dev token) still
+authenticate, while the default policy passes for everyone. Tokens
+minted before a restart will not validate against the new ephemeral
+key.
+
+### Startup validation
+
+`HookVaultOptions.Validate` fails fast (exit code `1`, one-line error,
+no stack trace) on:
+
+- invalid `validation.algorithm` (not in `hmac-sha1` / `hmac-sha256` /
+  `hmac-sha512`, case-insensitive),
+- missing `validation.signatureHeader`,
+- missing `validation.secretEnvVar`,
+- malformed `hookvault.json` (`JsonException` wrapped with file path,
+  line, column).
+
+For each provider whose `validation.secretEnvVar` resolves to an unset
+env var, the bootstrap logger emits a warning and startup continues —
+signature validation for that provider will return an error until the
+var is set.
 
 ## WebhookEvent entity fields
 

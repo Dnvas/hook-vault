@@ -176,6 +176,28 @@ API. A loud warning is logged at startup. Intended only when the
 listener is bound to `127.0.0.1`. **Do not enable in any environment
 where the port is reachable from outside the host.**
 
+When `HOOKVAULT_NO_AUTH=true`, the `HOOKVAULT_JWT_SECRET` env var becomes
+optional. If it is unset, HookVault generates an ephemeral in-memory
+signing key per process. The JWT bearer scheme stays registered (so the
+UI's startup-printed token still works for the SSE endpoint), but the
+default authorization policy passes for everyone. Tokens minted by one
+process will not validate after a restart — mint a fresh one each time,
+or set `HOOKVAULT_JWT_SECRET` to a stable value if you need that.
+
+### Startup validation
+
+On startup HookVault validates the loaded `hookvault.json` and fails fast
+with a one-line error (exit code `1`, no stack trace) if any provider
+has an invalid `validation.algorithm` (must be `hmac-sha1`, `hmac-sha256`,
+or `hmac-sha512`), a missing `validation.signatureHeader`, or a missing
+`validation.secretEnvVar`. A malformed JSON file produces a similar
+one-line error including the offending file path, line, and column.
+
+For each provider whose `validation.secretEnvVar` resolves to an unset
+env var, HookVault logs a warning at startup and starts normally —
+signature validation for that provider returns an error until the var
+is set. Missing secrets do not block startup.
+
 ## Provider examples
 
 Ready-to-use configs for common providers are in [`examples/`](examples/):
@@ -206,11 +228,29 @@ Pass it as `Authorization: Bearer <token>` or enter it in the Swagger UI
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/health` | none | Health check — provider list, DB type, event count |
-| `GET` | `/api/events` | JWT | List events (filter: `provider`, `status`, `dateFrom`, `dateTo`; paginate: `limit`, `offset`) |
+| `GET` | `/api/events` | JWT | List events (filter: `provider`, `status`, `from`, `to`, `bodyContains`, `providerEventId`; paginate: `limit`, `offset`) |
 | `GET` | `/api/events/{id}` | JWT | Full event detail — headers, body, validation debug info |
+| `GET` | `/api/events/stream` | JWT | Server-Sent Events stream of new captures and status changes |
 | `POST` | `/api/events/{id}/replay` | JWT | Enqueue a single event for replay |
 | `POST` | `/api/events/replay-failed` | JWT | Bulk-enqueue all `ForwardFailed` events |
-| `DELETE` | `/api/events` | JWT | Delete all events (optional `?provider=stripe` filter) |
+| `DELETE` | `/api/events` | JWT | Delete all events (requires `?confirm=true`; optional `?provider=stripe` filter) |
+
+`GET /api/events` supports two search filters in addition to the standard
+pagination/date filters:
+
+- `bodyContains` — case-insensitive substring match against the raw body.
+- `providerEventId` — exact match against the provider's event id when one
+  was extracted at ingest.
+
+`GET /api/events/stream` is a Server-Sent Events endpoint used by the UI to
+refresh the event list in real time. Because the browser `EventSource` API
+cannot set an `Authorization` header, this route accepts the token via the
+`?token=<jwt>` query string in addition to the normal `Authorization: Bearer`
+header. The query-string fallback applies to `/api/events/stream` only.
+
+`DELETE /api/events` requires `?confirm=true` to guard against accidental
+purges. Without it, the request returns `400` with code `delete_confirm_required`
+and no events are touched.
 
 ### JWT environment variables
 
@@ -230,6 +270,23 @@ DATABASE_URL=Host=db;Database=hookvault;Username=hookvault;Password=secret
 ```
 
 See `docker-compose.postgres.yml` for a ready-to-use PostgreSQL setup.
+
+## Deployment
+
+HookVault assumes a single replica per database. The auto-migration that
+runs on startup is not multi-replica-safe; run only one container against
+any given SQLite file or PostgreSQL database. To scale out for capture
+volume, run independent HookVault instances against independent databases
+rather than multiple replicas of the same one.
+
+### Docker healthcheck
+
+The bundled `Dockerfile` and both compose files configure a `HEALTHCHECK`
+that polls `GET /api/health` every 30 seconds (3 second timeout, 3
+retries, 10 second start period) using BusyBox `wget` from the Alpine
+base image. `docker compose ps` will show the container as `(healthy)`
+once the API responds, which makes it usable as a `depends_on:
+condition: service_healthy` target for downstream services.
 
 ## Metrics
 

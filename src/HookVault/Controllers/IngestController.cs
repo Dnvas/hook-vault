@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HookVault.Configuration;
+using HookVault.Contracts;
 using HookVault.Domain;
 using HookVault.Infrastructure;
 using HookVault.Middleware;
@@ -40,7 +41,7 @@ public class IngestController(
         {
             logger.LogWarning("Ingest request for unknown provider path '{Provider}'",
                 provider.Replace('\n', '_').Replace('\r', '_'));
-            return NotFound(new { error = $"No provider configured for path '{provider}'." });
+            return NotFound(new ApiError($"No provider configured for path '{provider}'.", "provider_not_found"));
         }
 
         var rawBody = HttpContext.Items[RawBodyMiddleware.RawBodyKey] as byte[] ?? [];

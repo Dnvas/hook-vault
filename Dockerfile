@@ -31,4 +31,9 @@ COPY --from=build /app/publish .
 
 USER app
 EXPOSE 8080
+
+# BusyBox wget ships in the alpine base image; no extra install needed.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8080/api/health || exit 1
+
 ENTRYPOINT ["dotnet", "HookVault.dll"]

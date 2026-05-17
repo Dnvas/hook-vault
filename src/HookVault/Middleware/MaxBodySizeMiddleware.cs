@@ -1,3 +1,5 @@
+using HookVault.Contracts;
+
 namespace HookVault.Middleware;
 
 // Caps the captured request body. Reads HOOKVAULT_MAX_BODY_BYTES per request so
@@ -22,11 +24,9 @@ public sealed class MaxBodySizeMiddleware(RequestDelegate next, ILogger<MaxBodyS
                 body.Length, maxBytes, path);
 
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = $"Request body exceeds HOOKVAULT_MAX_BODY_BYTES cap of {maxBytes} bytes.",
-                code = "body_too_large",
-            });
+            await context.Response.WriteAsJsonAsync(new ApiError(
+                $"Request body exceeds HOOKVAULT_MAX_BODY_BYTES cap of {maxBytes} bytes.",
+                "body_too_large"));
             return;
         }
 
