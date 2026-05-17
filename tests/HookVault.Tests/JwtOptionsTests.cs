@@ -90,4 +90,16 @@ public sealed class JwtOptionsTests
         var opts = JwtOptions.FromConfiguration(cfg);
         Assert.NotNull(opts);
     }
+
+    [Fact]
+    public void Ephemeral_returns_unique_secrets_at_least_48_bytes()
+    {
+        var a = JwtOptions.Ephemeral();
+        var b = JwtOptions.Ephemeral();
+
+        Assert.NotEqual(a.Secret, b.Secret);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(a.Secret) >= JwtOptions.MinimumSecretBytes);
+        Assert.Equal("hookvault", a.Issuer);
+        Assert.Equal("hookvault", a.Audience);
+    }
 }

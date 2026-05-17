@@ -14,6 +14,12 @@ services:
     volumes:
       - ./hookvault.json:/app/config/hookvault.json:ro
       - hookvault-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     restart: unless-stopped
 
 volumes:

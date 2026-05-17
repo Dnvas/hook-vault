@@ -20,17 +20,65 @@ if (args.Length > 0 && args[0] == "generate-token")
     return GenerateTokenCommand.Run(args[1..]);
 }
 
-var builder = WebApplication.CreateBuilder(args);
+var bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
+var bootstrapLogger = bootstrapLoggerFactory.CreateLogger("Startup");
 
-// --- Configuration ---
-// Load hookvault.json at startup; registered as a singleton so controllers can inject it.
-// Singleton = one shared instance for the lifetime of the app (like a module-level global).
-var hookVaultOptions = HookVaultOptions.Load(
-    LoggerFactory.Create(b => b.AddConsole()).CreateLogger("Startup"));
-builder.Services.AddSingleton(hookVaultOptions);
+WebApplicationBuilder builder;
+HookVaultOptions hookVaultOptions;
+JwtOptions jwtOptions;
+bool noAuth;
 
-var jwtOptions = JwtOptions.FromConfiguration(builder.Configuration);
-builder.Services.AddSingleton(jwtOptions);
+try
+{
+    builder = WebApplication.CreateBuilder(args);
+
+    // --- Configuration ---
+    // Load hookvault.json at startup; registered as a singleton so controllers can inject it.
+    // Singleton = one shared instance for the lifetime of the app (like a module-level global).
+    hookVaultOptions = HookVaultOptions.Load(bootstrapLogger);
+    builder.Services.AddSingleton(hookVaultOptions);
+
+    // HOOKVAULT_NO_AUTH=true disables [Authorize] enforcement (single-user local dev).
+    // Read it BEFORE JwtOptions resolution so we can substitute an ephemeral key when set.
+    noAuth = string.Equals(
+        Environment.GetEnvironmentVariable("HOOKVAULT_NO_AUTH"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
+    if (noAuth)
+    {
+        jwtOptions = JwtOptions.Ephemeral();
+        bootstrapLogger.LogWarning(
+            "HOOKVAULT_NO_AUTH=true — using ephemeral in-memory JWT key. " +
+            "Tokens issued by this process will not validate after restart.");
+    }
+    else
+    {
+        jwtOptions = JwtOptions.FromConfiguration(builder.Configuration);
+    }
+    builder.Services.AddSingleton(jwtOptions);
+
+    // Warn — don't fail — when a provider's signature env var is unset. The container can
+    // still start and capture events; signature validation will simply return an error
+    // until the operator sets the var.
+    foreach (var provider in hookVaultOptions.Providers)
+    {
+        if (provider.Validation is { } v
+            && !string.IsNullOrWhiteSpace(v.SecretEnvVar)
+            && string.IsNullOrEmpty(Environment.GetEnvironmentVariable(v.SecretEnvVar)))
+        {
+            bootstrapLogger.LogWarning(
+                "Provider '{Provider}': env var '{EnvVar}' is not set; " +
+                "signature validation will fail until you set it.",
+                provider.Name, v.SecretEnvVar);
+        }
+    }
+}
+catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
+{
+    bootstrapLogger.LogCritical("HookVault failed to start: {Message}", ex.Message);
+    return 1;
+}
 
 // --- Database ---
 // If DATABASE_URL is set, use PostgreSQL; otherwise default to SQLite.
@@ -133,11 +181,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // HOOKVAULT_NO_AUTH=true disables [Authorize] enforcement. The JwtBearer scheme
 // stays registered so callers that *do* present a token (e.g. SSE clients) still
 // authenticate, but the default policy passes for everyone.
-var noAuth = string.Equals(
-    Environment.GetEnvironmentVariable("HOOKVAULT_NO_AUTH"),
-    "true",
-    StringComparison.OrdinalIgnoreCase);
-
 if (noAuth)
 {
     builder.Services.AddAuthorization(options =>
