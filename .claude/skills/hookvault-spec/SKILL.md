@@ -166,7 +166,12 @@ The `SignatureValidator` must:
 ## Event forwarding
 
 After capturing, immediately forward to the provider's `forwardUrl` using
-`HttpClient` (from `IHttpClientFactory`). Preserve the original request body.
+`HttpClient` (from `IHttpClientFactory`). The named `"forwarder"` client's
+`HttpClient.Timeout` is configurable via `HOOKVAULT_FORWARD_TIMEOUT_SECONDS`
+(default 30, accepted range 1-300). Invalid or out-of-range values log
+a warning at startup and fall back to the 30-second default. The .NET stock
+default of 100s would block the single-reader replay worker for ~7 minutes
+per unreachable target across 4 attempts. Preserve the original request body.
 Forward original headers but add:
 
 - `X-HookVault-Event-Id`
@@ -179,13 +184,19 @@ on initial forward**. Retry is the replay system's job.
 ## Replay system
 
 **Internal machinery (Phase 2 — DONE):**
-- `ReplayQueue` — singleton `Channel<Guid>` wrapper. Exposes `EnqueueAsync(Guid)` and
-  `Reader`. `Channel.CreateUnbounded` with `SingleReader = true`.
+- `ReplayQueue` — singleton `Channel<ReplayJob>` wrapper. Exposes `EnqueueAsync(Guid)`,
+  `EnqueueWithBodyAsync(Guid, byte[])`, and `Reader`. `Channel.CreateBounded(10_000)`
+  with `SingleReader = true` and `FullMode = Wait` (callers backpressure via `await`).
 - `ReplayWorker` — `BackgroundService` that drains the channel via `ReadAllAsync`.
   Per item: creates a DI scope (`IServiceScopeFactory`), resolves `EventRepository`
   and `EventForwarder`, sets status to `Replaying`, then calls `EventForwarder.SendAsync`
   (the pure HTTP method — no DB touches).
   - 4 total attempts: 1 initial + 3 retries with delays `[1s, 2s, 4s]`.
+  - Retry eligibility: 5xx responses, network errors, and timeouts are retriable.
+    4xx responses are non-retriable EXCEPT 408 (Request Timeout), 425 (Too Early),
+    and 429 (Too Many Requests), which remain retriable. Retry timing
+    `[1s, 2s, 4s] × 3` is unchanged for retriable failures; non-retriable
+    failures short-circuit to `ReplayFailed` after the first attempt.
   - On success: sets `Forwarded`, records `ForwardedAt` + `ForwardStatusCode`.
   - On exhaustion: sets `ReplayFailed`. Final DB write uses `CancellationToken.None`
     to prevent orphaned `Replaying` rows on graceful shutdown.
@@ -228,7 +239,9 @@ Both are JWT-protected via `[Authorize]` on `EventsController`.
 AspNetCore HTTP metrics and HookVault's custom instruments:
 
 - `hookvault_events_total{provider, status}` — counter
-- `hookvault_replays_total{outcome}` — counter
+- `hookvault_replays_total{outcome}` — counter; `outcome` is one of
+  `"success"`, `"retry"` (incremented once per non-final retriable failure
+  before the next backoff delay), or `"exhausted"`
 - `hookvault_forward_duration_seconds{provider, outcome}` — histogram
 - `hookvault_retention_deleted_total{reason}` — counter
 - `hookvault_signature_validation_total{provider, result}` — counter
