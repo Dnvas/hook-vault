@@ -46,5 +46,8 @@ services:
     environment:
       HTTP_PORT: "8080"
       LOG_WITHOUT_NEWLINE: "true"
+    # Bound to loopback so the host's other network interfaces (LAN, VPN)
+    # cannot reach the echo container. Tests access it via `localhost:8888`
+    # and via `docker logs`; nothing else needs it.
     ports:
-      - "8888:8080"
+      - "127.0.0.1:8888:8080"
