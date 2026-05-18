@@ -8,12 +8,11 @@ test('ingested event appears in live feed', async ({ page, api }) => {
 
   await page.goto('/?token=e2e');
 
-  // EventRow renders inside the scrollable events container (div.overflow-y-auto).
-  // Each row is a <button> whose text content starts with the provider name.
-  // Scoping to the scroll container excludes the provider filter pills (which
-  // are outside it), giving a tight, unambiguous match.
+  // data-testid is set on EventRow's root <button> (ui/src/components/EventRow.tsx).
+  // Tighter than scoping by container class — survives styling refactors and
+  // does not collide with provider filter pills or other Tailwind chrome.
   const eventRow = page
-    .locator('div.overflow-y-auto button')
+    .getByTestId('event-row')
     .filter({ hasText: /stripe/i })
     .first();
 

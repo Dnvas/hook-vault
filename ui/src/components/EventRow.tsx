@@ -56,6 +56,7 @@ export function EventRow({ event, selected, onClick }: EventRowProps) {
 
   return (
     <button
+      data-testid="event-row"
       onClick={onClick}
       className={`w-full text-left px-3 py-2.5 border-l-2 transition-all duration-150 group
                   ${statusBorderColor(event.status)}

@@ -1,12 +1,18 @@
 import { test as base } from '@playwright/test';
 import { createHmac } from 'crypto';
 
-const STRIPE_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-if (!STRIPE_SECRET) {
-  throw new Error('STRIPE_WEBHOOK_SECRET must be set (same as docker compose env)');
-}
-
 const BASE = process.env.HOOKVAULT_BASE_URL ?? 'http://localhost:7777';
+
+function requireSecret(): string {
+  const s = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!s) {
+    throw new Error(
+      'STRIPE_WEBHOOK_SECRET must be set (same as docker compose env). ' +
+      'Run e2e tests with the helper script in tests/e2e-ui/README.md.',
+    );
+  }
+  return s;
+}
 
 export class ApiHelper {
   constructor(private base: string) {}
@@ -17,9 +23,10 @@ export class ApiHelper {
   }
 
   async ingestStripe(body: string): Promise<void> {
+    const secret = requireSecret();
     const ts = Math.floor(Date.now() / 1000);
     const payload = `${ts}.${body}`;
-    const sig = createHmac('sha256', STRIPE_SECRET!).update(payload).digest('hex');
+    const sig = createHmac('sha256', secret).update(payload).digest('hex');
     const r = await fetch(`${this.base}/api/ingest/stripe`, {
       method: 'POST',
       headers: {
