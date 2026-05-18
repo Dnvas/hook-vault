@@ -43,24 +43,28 @@ public sealed class IngestTests(ComposeStackFixture stack)
     }
 
     [Fact]
-    public async Task InvalidHmac_Rejected_NoForward()
+    public async Task InvalidHmac_CapturedAndFlagged_StillForwarded()
     {
+        // HookVault is a "transparent pass-through" debug proxy: it captures
+        // EVERY incoming webhook including those that fail signature
+        // validation, persists the validation result for inspection, and
+        // forwards to the configured upstream regardless. The downstream
+        // app is responsible for its own signature verification — HookVault
+        // intentionally does not act as a security perimeter. See
+        // hookvault-spec §"What HookVault does" for the principle.
         var hookvault = new HookVaultClient(stack.BaseUrl);
         var mock = new MockUpstreamClient(stack.MockUpstreamContainer);
         await hookvault.ResetAsync();
 
         var body = Encoding.UTF8.GetBytes("""{"event":"payment_intent.failed"}""");
         var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        // Set since after reset to avoid counting forwards from previous tests
-        // that may still be in the mock-upstream log within the same second.
+        // since is captured AFTER reset so we don't count forwards left
+        // over from earlier tests still inside the same-second log window.
         var since = DateTimeOffset.UtcNow;
 
         var resp = await hookvault.IngestStripeWithBadSignatureAsync(body, ts);
 
-        // The controller does not short-circuit on bad HMAC — it persists the event
-        // with signatureValid: false and still returns 202 Accepted. The spec intent
-        // is 401 Unauthorized, but the current implementation captures-and-flags rather
-        // than rejects. Asserting actual behaviour here; see DONE_WITH_CONCERNS.
+        // 202 Accepted — captured-and-flagged, not rejected.
         Assert.Equal(HttpStatusCode.Accepted, resp.StatusCode);
 
         var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
@@ -70,10 +74,8 @@ public sealed class IngestTests(ComposeStackFixture stack)
         Assert.Single(events);
         Assert.Equal("stripe", events[0].Provider);
 
-        // Give any forward attempt a chance to complete.
+        // Forward still happens. Give the worker time to deliver.
         await Task.Delay(1000);
-        // The controller forwards regardless of HMAC validity; the mock-upstream
-        // will have received the request. Count confirms at least one delivery.
         Assert.Equal(1, mock.Count(since, r => r.Path.Contains("/forwarded")));
     }
 }

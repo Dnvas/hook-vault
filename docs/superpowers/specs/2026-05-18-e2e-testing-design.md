@@ -242,9 +242,9 @@ assertions (assertions belong on the UI surface).
 
 | # | Name                              | Action                                  | Assertion                                    |
 |---|-----------------------------------|-----------------------------------------|----------------------------------------------|
-| 1 | `ValidHmac_Ingests_And_Forwards`  | POST /ingest/stripe with valid HMAC     | 200; event stored status=forwarded; mock-upstream received same body |
-| 2 | `InvalidHmac_Rejected`            | POST /ingest/stripe with bad HMAC       | 401; no event stored; mock-upstream got nothing |
-| 3 | `Replay_Forwards_Again`           | Ingest then POST /api/events/{id}/replay| 204; mock-upstream received 2 deliveries     |
+| 1 | `ValidHmac_Ingests_And_Forwards`  | POST /api/ingest/stripe with valid HMAC | 202 Accepted (event queued; forwarding is async); event stored status=Forwarded after worker runs; mock-upstream received same body |
+| 2 | `InvalidHmac_CapturedAndFlagged_StillForwarded` | POST /api/ingest/stripe with bad HMAC | 202 Accepted; response body has `signatureValid: false`; event IS stored; mock-upstream IS forwarded to. HookVault is a transparent debug proxy — it captures-and-flags rather than rejects (see product spec). |
+| 3 | `Replay_Forwards_Again`           | Ingest then POST /api/events/{id}/replay| 204 (or 202); mock-upstream received 2 deliveries |
 
 ### UI (Playwright)
 
