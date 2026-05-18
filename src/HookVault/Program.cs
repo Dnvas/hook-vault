@@ -212,7 +212,16 @@ else
 // InvalidModelStateResponseFactory maps automatic model-binding failures (e.g. a string
 // where an int is expected) to ApiError, so clients see one error shape instead of both
 // ApiError and the default ValidationProblemDetails.
-builder.Services.AddControllers()
+// Test-only endpoints are only mapped under ASPNETCORE_ENVIRONMENT=Testing.
+// We keep the controller class in the production assembly (no separate project)
+// but exclude it from controller discovery outside Testing.
+builder.Services.AddControllers(options =>
+{
+    if (!builder.Environment.IsEnvironment("Testing"))
+    {
+        options.Conventions.Add(new HookVault.Infrastructure.ExcludeTestControllersConvention());
+    }
+})
     .ConfigureApiBehaviorOptions(opts =>
     {
         opts.InvalidModelStateResponseFactory = context =>
@@ -438,7 +447,19 @@ app.UseAuthorization();
 app.MapPrometheusScrapingEndpoint("/metrics").AllowAnonymous();
 
 app.MapControllers();
-app.MapFallbackToFile("index.html");
+// Exclude /api/ paths from the SPA fallback so unknown API routes return 404
+// rather than the React shell. Without this exclusion, endpoint routing generates
+// a 405 for POST to any unregistered /api/ path because the fallback registers a
+// GET-only endpoint that matches all paths including /api/*.
+app.MapFallbackToFile("index.html").Add(b =>
+{
+    b.Metadata.Add(new Microsoft.AspNetCore.Routing.HttpMethodMetadata(["GET"]));
+});
+app.Map("/api/{**path}", (HttpContext ctx) =>
+{
+    ctx.Response.StatusCode = 404;
+    return Task.CompletedTask;
+});
 app.Run();
 return 0;
 
