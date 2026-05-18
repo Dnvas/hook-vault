@@ -7,10 +7,13 @@ using Microsoft.EntityFrameworkCore;
 namespace HookVault.Controllers;
 
 /// <summary>
-/// Test-only endpoints. Only registered when
-/// <see cref="IHostEnvironment.EnvironmentName"/> is "Testing".
-/// Outside Testing the route does not exist (404). The action body re-checks
-/// the environment as belt-and-braces against accidental registration.
+/// Test-only endpoints. Gated by two independent checks:
+/// (1) the <see cref="ExcludeTestControllersConvention"/> strips this
+/// controller from MVC discovery unless <c>ASPNETCORE_ENVIRONMENT=Testing</c>;
+/// (2) the action body additionally requires <c>HOOKVAULT_E2E_TEST=1</c>.
+/// Both must be true. A production deploy that accidentally inherits
+/// <c>ASPNETCORE_ENVIRONMENT=Testing</c> still 404s because the
+/// <c>HOOKVAULT_E2E_TEST</c> var is never set in production.
 /// </summary>
 [ApiController]
 [Route("api/test")]
@@ -24,11 +27,13 @@ public sealed class TestController(
     [HttpPost("reset")]
     public async Task<IActionResult> Reset(CancellationToken ct)
     {
-        if (!env.IsEnvironment("Testing"))
+        // Double-gate: env name AND explicit opt-in env var. The env var is the
+        // load-bearing one — it must never appear in any production environment.
+        var optedIn = Environment.GetEnvironmentVariable("HOOKVAULT_E2E_TEST") == "1";
+        if (!env.IsEnvironment("Testing") || !optedIn)
         {
-            // Should be unreachable: TestController is only added to MVC parts
-            // when env.IsEnvironment("Testing"). Defence-in-depth.
-            logger.LogError("TestController.Reset reached outside Testing env");
+            logger.LogError(
+                "TestController.Reset reached without both Testing env and HOOKVAULT_E2E_TEST=1");
             return NotFound();
         }
 

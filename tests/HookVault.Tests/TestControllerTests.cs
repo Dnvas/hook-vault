@@ -28,12 +28,16 @@ public sealed class TestControllerTests : IDisposable
         // during startup before any ConfigureWebHost callbacks fire.
         Environment.SetEnvironmentVariable("HOOKVAULT_NO_AUTH", "true");
         Environment.SetEnvironmentVariable("HOOKVAULT_CONFIG_PATH", _configFilePath);
+        // Opt-in flag required by TestController.Reset (second gate alongside
+        // ASPNETCORE_ENVIRONMENT=Testing). Cleared in Dispose.
+        Environment.SetEnvironmentVariable("HOOKVAULT_E2E_TEST", "1");
     }
 
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("HOOKVAULT_NO_AUTH", null);
         Environment.SetEnvironmentVariable("HOOKVAULT_CONFIG_PATH", null);
+        Environment.SetEnvironmentVariable("HOOKVAULT_E2E_TEST", null);
         if (File.Exists(_configFilePath))
             File.Delete(_configFilePath);
         _connection.Dispose();
@@ -80,5 +84,25 @@ public sealed class TestControllerTests : IDisposable
         using var client = factory.CreateClient();
         var resp = await client.PostAsync("/api/test/reset", content: null);
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Reset_UnderTesting_WithoutOptIn_Returns404()
+    {
+        // Simulate a production deploy that wrongly inherits Testing env but
+        // does NOT set HOOKVAULT_E2E_TEST=1. The endpoint must still 404.
+        Environment.SetEnvironmentVariable("HOOKVAULT_E2E_TEST", null);
+        try
+        {
+            using var factory = Factory("Testing");
+            using var client = factory.CreateClient();
+            var resp = await client.PostAsync("/api/test/reset", content: null);
+            Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        }
+        finally
+        {
+            // Restore for the rest of this instance's life (Dispose will clear again).
+            Environment.SetEnvironmentVariable("HOOKVAULT_E2E_TEST", "1");
+        }
     }
 }

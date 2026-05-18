@@ -5,6 +5,10 @@ services:
       - "7777:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Testing
+      # Required second gate for /api/test/reset. Setting both
+      # ASPNETCORE_ENVIRONMENT=Testing AND HOOKVAULT_E2E_TEST=1 is the
+      # explicit opt-in; production deploys must set neither.
+      HOOKVAULT_E2E_TEST: "1"
       HOOKVAULT_JWT_SECRET: ${HOOKVAULT_JWT_SECRET:?Set HOOKVAULT_JWT_SECRET}
       HOOKVAULT_JWT_ISSUER: hookvault
       HOOKVAULT_JWT_AUDIENCE: hookvault
