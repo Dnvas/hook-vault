@@ -43,8 +43,11 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Test
+        # Scope to the unit-test project: a bare `dotnet test` would also pick
+        # up tests/HookVault.E2E and try to boot docker compose without the
+        # E2E_SKIP_COMPOSE=1 env that the dedicated e2e jobs set.
         run: >
-          dotnet test
+          dotnet test tests/HookVault.Tests
           --configuration Release
           --no-build
           --verbosity normal
