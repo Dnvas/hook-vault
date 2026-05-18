@@ -21,4 +21,16 @@ public sealed class ReplayQueue
 
     public ValueTask EnqueueWithBodyAsync(Guid eventId, byte[] bodyOverride, CancellationToken ct = default)
         => _channel.Writer.WriteAsync(new ReplayJob(eventId, bodyOverride), ct);
+
+    /// <summary>
+    /// Drains all pending jobs without invoking them. Test-only helper used by
+    /// <c>POST /api/test/reset</c>; never called from production code paths.
+    /// </summary>
+    public void Drain()
+    {
+        while (_channel.Reader.TryRead(out _))
+        {
+            // discard
+        }
+    }
 }
