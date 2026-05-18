@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{F4B3C7D1
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookVault.Tests", "tests\HookVault.Tests\HookVault.Tests.csproj", "{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HookVault.E2E", "tests\HookVault.E2E\HookVault.E2E.csproj", "{1406555E-2CB9-4942-A38B-F52BB0E2254F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1406555E-2CB9-4942-A38B-F52BB0E2254F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1406555E-2CB9-4942-A38B-F52BB0E2254F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1406555E-2CB9-4942-A38B-F52BB0E2254F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1406555E-2CB9-4942-A38B-F52BB0E2254F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C2BD21BF-6016-4CFA-A689-422E1CF6ADEC} = {295FF0E6-0DC1-4B9B-B4EC-50B7FF84FCF3}
 		{12D2CC80-3F2E-4F95-8733-5FEFD0F9C5C4} = {F4B3C7D1-51CE-491A-8A57-83B7718F8B5D}
+		{1406555E-2CB9-4942-A38B-F52BB0E2254F} = {F4B3C7D1-51CE-491A-8A57-83B7718F8B5D}
 	EndGlobalSection
 EndGlobal
