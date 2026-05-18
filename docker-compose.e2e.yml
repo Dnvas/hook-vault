@@ -1,0 +1,46 @@
+services:
+  hookvault:
+    build: .
+    ports:
+      - "7777:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testing
+      HOOKVAULT_JWT_SECRET: ${HOOKVAULT_JWT_SECRET:?Set HOOKVAULT_JWT_SECRET}
+      HOOKVAULT_JWT_ISSUER: hookvault
+      HOOKVAULT_JWT_AUDIENCE: hookvault
+      HOOKVAULT_NO_AUTH: "true"
+      DATABASE_URL: postgresql://hookvault:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/hookvault
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET}
+    volumes:
+      - ./hookvault.e2e.json:/app/config/hookvault.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      mock-upstream:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 12
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hookvault
+      POSTGRES_USER: hookvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hookvault"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  mock-upstream:
+    image: mendhak/http-https-echo:34
+    environment:
+      HTTP_PORT: "8080"
+      LOG_WITHOUT_NEWLINE: "true"
+    ports:
+      - "8888:8080"
