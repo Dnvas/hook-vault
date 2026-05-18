@@ -69,6 +69,14 @@ public partial class PostgresColumnTypes : Migration
         }
     }
 
+    /// <summary>
+    /// Rollback path. <strong>Lossy</strong> for rows whose unix-second timestamps
+    /// exceed Int32.MaxValue (2038-01-19T03:14:07Z): the bigint→integer cast
+    /// silently truncates / overflows. The migration is reversible for any
+    /// database created and rolled back before that date with no stored
+    /// post-2038 timestamps; rolling back a production database with future-dated
+    /// events would corrupt them. Operators rolling back should snapshot first.
+    /// </summary>
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         if (migrationBuilder.ActiveProvider == "Npgsql.EntityFrameworkCore.PostgreSQL")

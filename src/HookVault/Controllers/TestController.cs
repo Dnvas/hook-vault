@@ -37,17 +37,12 @@ public sealed class TestController(
             return NotFound();
         }
 
-        // EF Core resolves the entity-mapped table identifier (defaults to "Events")
-        // — avoids hardcoding the table name in raw SQL.
-        var tableName = db.Model.FindEntityType(typeof(Domain.WebhookEvent))?
-            .GetTableName() ?? "Events";
-
-        // Postgres and SQLite both support TRUNCATE-or-DELETE; DELETE works on both
-        // and is fast enough for test-reset traffic. Avoids dialect branching.
-        // tableName is sourced from EF Core's own model metadata, not user input.
-#pragma warning disable EF1002
-        await db.Database.ExecuteSqlRawAsync($"DELETE FROM \"{tableName}\"", ct);
-#pragma warning restore EF1002
+        // Hardcoded literal — Postgres can't parameterise table identifiers, so an
+        // interpolated form would still need raw SQL. A literal is safest: no
+        // surface for future code to make the table name mutable and silently
+        // turn this into SQL injection. If WebhookEvent ever gets remapped to a
+        // different table name, update this string at the same time.
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM \"Events\"", ct);
         queue.Drain();
         return NoContent();
     }

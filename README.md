@@ -333,8 +333,8 @@ running on the same host.
 # Build
 dotnet build --configuration Release
 
-# Test
-dotnet test --configuration Release
+# Unit tests (xUnit, SQLite in-memory)
+dotnet test tests/HookVault.Tests --configuration Release
 
 # Check formatting
 dotnet format --verify-no-changes
@@ -348,6 +348,44 @@ dotnet run --project src/HookVault
 
 Swagger UI is available at `http://localhost:5000/swagger` when running in
 Development mode.
+
+### End-to-end tests
+
+Two layered E2E suites run against a real `docker-compose.e2e.yml` stack
+(Postgres + HookVault + mock upstream). Both run on every PR via the
+`e2e-api` and `e2e-ui` GitHub Actions jobs.
+
+```bash
+# Generate per-run secrets
+export HOOKVAULT_JWT_SECRET=$(openssl rand -hex 32)
+export POSTGRES_PASSWORD=$(openssl rand -hex 16)
+export STRIPE_WEBHOOK_SECRET=$(openssl rand -hex 32)
+
+# Boot the stack and wait for health
+docker compose -f docker-compose.e2e.yml up -d --build
+until curl -fsS http://localhost:7777/api/health >/dev/null; do sleep 1; done
+
+# API suite (3 xUnit tests, exercises ingest → forward → replay)
+E2E_SKIP_COMPOSE=1 dotnet test tests/HookVault.E2E
+
+# UI suite (2 Playwright tests, browser-driven against the React dashboard)
+cd tests/e2e-ui && npm ci && npx playwright install --with-deps chromium
+HOOKVAULT_BASE_URL=http://localhost:7777 npx playwright test
+cd ../..
+
+# Tear down
+docker compose -f docker-compose.e2e.yml down -v
+```
+
+Per-test isolation uses a test-only `POST /api/test/reset` endpoint that
+truncates the events table and drains the replay queue. The endpoint is
+double-gated by `ASPNETCORE_ENVIRONMENT=Testing` AND `HOOKVAULT_E2E_TEST=1`
+(both set inside `docker-compose.e2e.yml`); it does not exist in any
+non-Testing build, and `HOOKVAULT_E2E_TEST` must never be set in production
+deploys.
+
+See [`tests/e2e-ui/README.md`](tests/e2e-ui/README.md) for more on the UI
+suite (selector conventions, trace artifacts, failure debugging).
 
 ## License
 

@@ -12,6 +12,9 @@ services:
       HOOKVAULT_JWT_SECRET: ${HOOKVAULT_JWT_SECRET:?Set HOOKVAULT_JWT_SECRET}
       HOOKVAULT_JWT_ISSUER: hookvault
       HOOKVAULT_JWT_AUDIENCE: hookvault
+      # NEVER set HOOKVAULT_NO_AUTH=true in a production compose override.
+      # It disables JWT enforcement on every /api/* route. Safe here because
+      # this stack is reachable only on the docker network + localhost:7777.
       HOOKVAULT_NO_AUTH: "true"
       DATABASE_URL: postgresql://hookvault:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/hookvault
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET}
