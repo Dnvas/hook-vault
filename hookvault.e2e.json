@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "name": "stripe",
+      "path": "/stripe",
+      "forwardUrl": "http://mock-upstream:8080/forwarded",
+      "validation": {
+        "algorithm": "hmac-sha256",
+        "secretEnvVar": "STRIPE_WEBHOOK_SECRET",
+        "signatureHeader": "Stripe-Signature",
+        "payloadFormat": "{timestamp}.{body}",
+        "signatureEncoding": "hex",
+        "signaturePattern": "v1={signature}",
+        "timestampPattern": "t={timestamp}"
+      }
+    }
+  ]
+}

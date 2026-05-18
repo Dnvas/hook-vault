@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Postgres column-type drift (release-blocker).** Migrations prior to
+  this release were generated against the SQLite provider and used
+  `type: "INTEGER"` / `type: "TEXT"` uniformly. Against Postgres those
+  became `integer` and `text`, mismatching the model's `bool`, `long`,
+  and `Guid` properties. Every webhook ingest into a Postgres deploy
+  was failing with `column ... is of type integer but expression is of
+  type boolean` (or `operator does not exist: text = uuid` on UPDATE).
+  SQLite users were unaffected (dynamic typing tolerates the mismatch);
+  Postgres users were silently broken since the first Postgres release.
+  New migration `00000000000004_PostgresColumnTypes` ALTERs five
+  columns to their correct Postgres types: `SignatureValid` /
+  `LastReplayWithEditedBody` → `boolean`, `ReceivedAt` / `ForwardedAt` /
+  `LastReplayAt` → `bigint`, plus the `Id` PK column → `uuid` (with
+  PK constraint cycle). SQLite branch is a no-op. The `Down()` cast
+  from `bigint` back to `integer` is **lossy** for post-2038
+  timestamps — snapshot before rolling back if your database has
+  future-dated events.
+
+### Added
+
+- **Layered end-to-end test suite.** New `tests/HookVault.E2E/` xUnit
+  project drives the full HTTP surface against a live Postgres stack
+  via `docker-compose.e2e.yml`; new `tests/e2e-ui/` Playwright project
+  drives the React dashboard in a real browser. Two parallel CI jobs
+  (`e2e-api`, `e2e-ui`) run on every PR. Test-only `POST /api/test/reset`
+  endpoint provides per-test isolation; gated by both
+  `ASPNETCORE_ENVIRONMENT=Testing` AND `HOOKVAULT_E2E_TEST=1` (the latter
+  must never be set in production).
+
+### Changed
+
+- **Unknown `/api/*` paths now return 404 instead of 405.** Previously
+  any unrecognised API path matched the React SPA fallback's GET-only
+  endpoint, producing a confusing 405. A new `app.Map("/api/{**path}", ...)`
+  catch-all returns 404 for genuinely unknown API routes. Specific
+  controller routes (`/api/ingest/*`, `/api/events/*`, `/api/health`,
+  `/api/test/reset`, `/api/events/stream`) match by specificity and
+  are unaffected.
+
+- **Invalid-HMAC behaviour explicitly documented.** HookVault has
+  always captured-and-flagged-and-forwarded webhooks that fail
+  signature validation (`signatureValid: false` on the stored event,
+  status 202 Accepted, forwarded to the configured upstream). This
+  is a deliberate "transparent debug proxy" design — the downstream
+  app is responsible for its own signature verification. Behaviour
+  is unchanged; the product spec now states it explicitly.
+
 ## [0.3.0] — 2026-05-17
 
 Polish, ergonomics, and distribution improvements on top of v0.2.

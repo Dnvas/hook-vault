@@ -1,0 +1,56 @@
+services:
+  hookvault:
+    build: .
+    ports:
+      - "7777:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testing
+      # Required second gate for /api/test/reset. Setting both
+      # ASPNETCORE_ENVIRONMENT=Testing AND HOOKVAULT_E2E_TEST=1 is the
+      # explicit opt-in; production deploys must set neither.
+      HOOKVAULT_E2E_TEST: "1"
+      HOOKVAULT_JWT_SECRET: ${HOOKVAULT_JWT_SECRET:?Set HOOKVAULT_JWT_SECRET}
+      HOOKVAULT_JWT_ISSUER: hookvault
+      HOOKVAULT_JWT_AUDIENCE: hookvault
+      # NEVER set HOOKVAULT_NO_AUTH=true in a production compose override.
+      # It disables JWT enforcement on every /api/* route. Safe here because
+      # this stack is reachable only on the docker network + localhost:7777.
+      HOOKVAULT_NO_AUTH: "true"
+      DATABASE_URL: postgresql://hookvault:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/hookvault
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET}
+    volumes:
+      - ./hookvault.e2e.json:/app/config/hookvault.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      mock-upstream:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 12
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hookvault
+      POSTGRES_USER: hookvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hookvault"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  mock-upstream:
+    image: mendhak/http-https-echo:34
+    environment:
+      HTTP_PORT: "8080"
+      LOG_WITHOUT_NEWLINE: "true"
+    # Bound to loopback so the host's other network interfaces (LAN, VPN)
+    # cannot reach the echo container. Tests access it via `localhost:8888`
+    # and via `docker logs`; nothing else needs it.
+    ports:
+      - "127.0.0.1:8888:8080"

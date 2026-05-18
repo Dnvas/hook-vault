@@ -31,7 +31,12 @@ in under a minute.
 3. Stores the full event (headers, body, signature validation result with debug
    info, timestamp, provider name).
 4. Forwards the event to the configured local destination URL (transparent
-   pass-through).
+   pass-through). **Forwarding happens regardless of signature validation
+   result** — invalid-HMAC events are captured-and-flagged (`signatureValid:
+   false` on the stored event) AND still forwarded. HookVault is a debug
+   proxy, not a security gateway; the downstream app is responsible for its
+   own signature verification. Use `captureOnly: true` if you do not want
+   forwarding for a given provider at all.
 5. Provides a JWT-protected management API to browse, filter, inspect, and
    replay captured events.
 6. Replays events asynchronously via a background worker with retry logic and
