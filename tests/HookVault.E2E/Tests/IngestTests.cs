@@ -22,7 +22,10 @@ public sealed class IngestTests(ComposeStackFixture stack)
 
         var body = Encoding.UTF8.GetBytes("""{"event":"payment_intent.succeeded","id":"evt_test_1"}""");
         var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var since = DateTimeOffset.UtcNow.AddSeconds(-1);
+        // since is captured AFTER reset (consistent with the InvalidHmac
+        // test) so forwards from any earlier test in the same log window
+        // are excluded from the assertions below.
+        var since = DateTimeOffset.UtcNow;
 
         var resp = await hookvault.IngestStripeAsync(body, Secret, ts);
 

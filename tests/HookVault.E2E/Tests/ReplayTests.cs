@@ -35,9 +35,9 @@ public sealed class ReplayTests(ComposeStackFixture stack)
         Assert.Single(events);
 
         var replay = await hookvault.ReplayAsync(events[0].Id);
-        Assert.True(
-            replay.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Accepted,
-            $"replay returned {replay.StatusCode}");
+        // EventsController.Replay returns 202 Accepted deterministically
+        // (replay is queued for the background worker, not synchronous).
+        Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
 
         // Two forwards expected: original + replay. Poll up to 10s.
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
