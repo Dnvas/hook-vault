@@ -68,8 +68,12 @@ export function EventRow({ event, selected, onClick }: EventRowProps) {
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotColor(event.status)}`} />
-          <span className="text-sm font-medium text-white truncate">{event.provider}</span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotColor(event.status)}`}
+          />
+          <span className="text-sm font-medium text-white truncate">
+            {event.provider}
+          </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {sigBadge(event.signatureValid)}
@@ -83,8 +87,12 @@ export function EventRow({ event, selected, onClick }: EventRowProps) {
         </div>
       </div>
       <div className="flex items-center justify-between mt-0.5">
-        <span className="text-xs text-slate-500 font-mono truncate">{event.path}</span>
-        <span className="text-xs text-slate-600 font-mono shrink-0 ml-2">{time}</span>
+        <span className="text-xs text-slate-500 font-mono truncate">
+          {event.path}
+        </span>
+        <span className="text-xs text-slate-600 font-mono shrink-0 ml-2">
+          {time}
+        </span>
       </div>
     </button>
   )

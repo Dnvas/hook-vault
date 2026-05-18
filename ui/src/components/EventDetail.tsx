@@ -69,7 +69,9 @@ export function EventDetail({ id }: EventDetailProps) {
   if (error || !data) {
     return (
       <div className="h-full flex items-center justify-center">
-        <span className="text-red-400 text-xs font-mono">Failed to load event</span>
+        <span className="text-red-400 text-xs font-mono">
+          Failed to load event
+        </span>
       </div>
     )
   }
@@ -82,11 +84,15 @@ export function EventDetail({ id }: EventDetailProps) {
       <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-slate-700/60 shrink-0">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-sm font-semibold text-white">{data.provider}</span>
+            <span className="text-sm font-semibold text-white">
+              {data.provider}
+            </span>
             <StatusBadge status={data.status} />
             {data.status === 'Captured' && (
-              <span className="text-xs font-mono uppercase tracking-wider px-2 py-0.5 rounded
-                               bg-sky-950/60 text-sky-300 border border-sky-700/60">
+              <span
+                className="text-xs font-mono uppercase tracking-wider px-2 py-0.5 rounded
+                               bg-sky-950/60 text-sky-300 border border-sky-700/60"
+              >
                 capture only
               </span>
             )}
@@ -126,7 +132,7 @@ export function EventDetail({ id }: EventDetailProps) {
           </label>
           <textarea
             value={editedBody}
-            onChange={e => setEditedBody(e.target.value)}
+            onChange={(e) => setEditedBody(e.target.value)}
             rows={10}
             className="w-full px-3 py-2 text-sm font-mono
                        bg-slate-950 text-slate-100 border border-slate-700
@@ -159,7 +165,10 @@ export function EventDetail({ id }: EventDetailProps) {
       <div className="flex-1 overflow-y-auto min-h-0 px-4 py-5 space-y-6">
         <BodySection body={data.body} />
         <HeadersSection headers={data.headers} />
-        <ValidationSection valid={data.signatureValid} details={data.validationDetails} />
+        <ValidationSection
+          valid={data.signatureValid}
+          details={data.validationDetails}
+        />
         <ForwardSection
           forwardUrl={data.forwardUrl}
           forwardStatusCode={data.forwardStatusCode}

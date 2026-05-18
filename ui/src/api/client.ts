@@ -42,7 +42,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getHealth: () => request<HealthResponse>('/api/health'),
 
-  listEvents: (params: { provider?: string; status?: string; limit?: number; offset?: number }) => {
+  listEvents: (params: {
+    provider?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }) => {
     const q = new URLSearchParams()
     if (params.provider) q.set('provider', params.provider)
     if (params.status) q.set('status', params.status)
@@ -62,7 +67,8 @@ export const api = {
     return request<unknown>(`/api/events/${id}/replay`, init)
   },
 
-  replayFailed: () => request<unknown>('/api/events/replay-failed', { method: 'POST' }),
+  replayFailed: () =>
+    request<unknown>('/api/events/replay-failed', { method: 'POST' }),
 
   deleteEvents: (provider?: string) => {
     const q = provider ? `?provider=${encodeURIComponent(provider)}` : ''

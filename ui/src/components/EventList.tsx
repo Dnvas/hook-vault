@@ -15,7 +15,14 @@ interface EventListProps {
   onStatusFilter: (s: string) => void
 }
 
-const STATUS_OPTIONS = ['', 'Captured', 'Forwarded', 'ForwardFailed', 'Replaying', 'ReplayFailed']
+const STATUS_OPTIONS = [
+  '',
+  'Captured',
+  'Forwarded',
+  'ForwardFailed',
+  'Replaying',
+  'ReplayFailed',
+]
 
 export function EventList({
   selectedId,
@@ -92,7 +99,9 @@ export function EventList({
       {/* Event rows */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {isLoading && (
-          <div className="text-slate-600 text-xs font-mono text-center py-10">Loading…</div>
+          <div className="text-slate-600 text-xs font-mono text-center py-10">
+            Loading…
+          </div>
         )}
         {!isLoading && events.length === 0 && (
           <div className="px-4 py-10 text-center">

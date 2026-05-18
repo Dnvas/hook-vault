@@ -16,11 +16,16 @@ export function HeadersSection({ headers }: HeadersSectionProps) {
         <table className="w-full text-xs">
           <tbody>
             {entries.map(([k, v]) => (
-              <tr key={k} className="border-b border-slate-700/30 last:border-0">
+              <tr
+                key={k}
+                className="border-b border-slate-700/30 last:border-0"
+              >
                 <td className="py-1.5 pr-4 text-slate-500 font-mono align-top w-2/5 break-all">
                   {k}
                 </td>
-                <td className="py-1.5 text-slate-300 font-mono break-all">{v}</td>
+                <td className="py-1.5 text-slate-300 font-mono break-all">
+                  {v}
+                </td>
               </tr>
             ))}
           </tbody>

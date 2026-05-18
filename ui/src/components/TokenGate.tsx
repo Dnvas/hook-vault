@@ -38,20 +38,29 @@ export function TokenGate({ onToken }: TokenGateProps) {
           <div className="inline-flex items-center gap-2.5 mb-3">
             <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 4h10M2 7h6M2 10h8" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                <path
+                  d="M2 4h10M2 7h6M2 10h8"
+                  stroke="white"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
             </div>
-            <span className="text-white font-semibold text-lg tracking-tight">HookVault</span>
+            <span className="text-white font-semibold text-lg tracking-tight">
+              HookVault
+            </span>
           </div>
-          <p className="text-slate-500 text-sm font-mono">webhook capture + replay</p>
+          <p className="text-slate-500 text-sm font-mono">
+            webhook capture + replay
+          </p>
         </div>
 
         {/* Card */}
         <div className="bg-slate-800 border border-slate-700/60 rounded-xl p-6 shadow-2xl shadow-black/40">
-          <h2 className="text-sm font-semibold text-slate-300 mb-1">Access token required</h2>
-          <p className="text-slate-500 text-xs mb-4">
-            Generate one with:
-          </p>
+          <h2 className="text-sm font-semibold text-slate-300 mb-1">
+            Access token required
+          </h2>
+          <p className="text-slate-500 text-xs mb-4">Generate one with:</p>
           <pre className="mb-5 text-xs bg-slate-900 text-indigo-300 rounded-lg px-3 py-2.5 font-mono border border-slate-700/50">
             docker compose run --rm hookvault generate-token
           </pre>
@@ -81,7 +90,8 @@ export function TokenGate({ onToken }: TokenGateProps) {
         </div>
 
         <p className="mt-4 text-center text-xs text-slate-600">
-          Token stored in <code className="font-mono text-slate-500">sessionStorage</code>
+          Token stored in{' '}
+          <code className="font-mono text-slate-500">sessionStorage</code>
         </p>
       </div>
     </div>

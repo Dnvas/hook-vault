@@ -38,10 +38,17 @@ function Inner() {
         <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-slate-700/60 shrink-0">
           <div className="w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shrink-0">
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M1 3h8M1 5h5M1 7h6" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+              <path
+                d="M1 3h8M1 5h5M1 7h6"
+                stroke="white"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
-          <span className="text-sm font-semibold text-white tracking-tight">HookVault</span>
+          <span className="text-sm font-semibold text-white tracking-tight">
+            HookVault
+          </span>
         </div>
         <EventList
           selectedId={selectedId}
@@ -59,10 +66,17 @@ function Inner() {
           <div className="h-full flex flex-col items-center justify-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center mb-1">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M2 5h14M2 9h9M2 13h11" stroke="rgba(99,102,241,0.5)" strokeWidth="1.5" strokeLinecap="round" />
+                <path
+                  d="M2 5h14M2 9h9M2 13h11"
+                  stroke="rgba(99,102,241,0.5)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
             </div>
-            <p className="text-slate-600 text-xs font-mono">Select an event to inspect</p>
+            <p className="text-slate-600 text-xs font-mono">
+              Select an event to inspect
+            </p>
           </div>
         )}
       </div>

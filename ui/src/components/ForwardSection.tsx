@@ -13,8 +13,15 @@ type ForwardProps = Pick<
 >
 
 export function ForwardSection(props: ForwardProps) {
-  const { forwardUrl, forwardStatusCode, forwardError, forwardedAt, replayCount, lastReplayAt, lastError } =
-    props
+  const {
+    forwardUrl,
+    forwardStatusCode,
+    forwardError,
+    forwardedAt,
+    replayCount,
+    lastReplayAt,
+    lastError,
+  } = props
 
   return (
     <section>
@@ -25,18 +32,30 @@ export function ForwardSection(props: ForwardProps) {
           <Row
             label="Status"
             value={forwardStatusCode.toString()}
-            valueClass={forwardStatusCode < 300 ? 'text-green-400' : 'text-red-400'}
+            valueClass={
+              forwardStatusCode < 300 ? 'text-green-400' : 'text-red-400'
+            }
           />
         )}
-        {forwardError && <Row label="Error" value={forwardError} valueClass="text-red-400" />}
+        {forwardError && (
+          <Row label="Error" value={forwardError} valueClass="text-red-400" />
+        )}
         {forwardedAt && (
-          <Row label="Forwarded" value={new Date(forwardedAt).toLocaleString()} />
+          <Row
+            label="Forwarded"
+            value={new Date(forwardedAt).toLocaleString()}
+          />
         )}
         {replayCount > 0 && <Row label="Replays" value={String(replayCount)} />}
         {lastReplayAt && (
-          <Row label="Last replay" value={new Date(lastReplayAt).toLocaleString()} />
+          <Row
+            label="Last replay"
+            value={new Date(lastReplayAt).toLocaleString()}
+          />
         )}
-        {lastError && <Row label="Last error" value={lastError} valueClass="text-red-400" />}
+        {lastError && (
+          <Row label="Last error" value={lastError} valueClass="text-red-400" />
+        )}
       </dl>
     </section>
   )
