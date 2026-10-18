@@ -11,3 +11,5 @@ TestResults/
 hookvault.json
 .env
 .env.*
+ui/node_modules/
+ui/dist/
