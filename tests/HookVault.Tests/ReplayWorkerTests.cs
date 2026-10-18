@@ -11,17 +11,22 @@ namespace HookVault.Tests;
 
 public sealed class ReplayWorkerTests : IAsyncDisposable
 {
-    private readonly SqliteConnection _connection;
+    // Named shared-cache in-memory DB: each DbContext opens its own connection,
+    // so the test's polling reads and the worker's writes never share a
+    // (non-thread-safe) SqliteConnection. _keepAlive holds the DB open.
+    private readonly string _connectionString =
+        $"DataSource=file:{Guid.NewGuid():N}?mode=memory&cache=shared";
+    private readonly SqliteConnection _keepAlive;
     private readonly HookVaultDbContext _db;
     private readonly EventRepository _repo;
     private readonly List<ServiceProvider> _providers = [];
 
     public ReplayWorkerTests()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        _keepAlive = new SqliteConnection(_connectionString);
+        _keepAlive.Open();
         var options = new DbContextOptionsBuilder<HookVaultDbContext>()
-            .UseSqlite(_connection)
+            .UseSqlite(_connectionString)
             .Options;
         _db = new HookVaultDbContext(options);
         _db.Database.EnsureCreated();
@@ -33,7 +38,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         foreach (var p in _providers)
             await p.DisposeAsync();
         await _db.DisposeAsync();
-        await _connection.DisposeAsync();
+        await _keepAlive.DisposeAsync();
     }
 
     private (ReplayWorker worker, ReplayQueue queue, SequencedHandler handler) BuildWorker(
@@ -43,7 +48,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDbContext<HookVaultDbContext>(opts => opts.UseSqlite(_connection));
+        services.AddDbContext<HookVaultDbContext>(opts => opts.UseSqlite(_connectionString));
         services.AddScoped<EventRepository>();
         services.AddSingleton<HookVault.Observability.HookVaultMeter>();
         services.AddScoped<EventForwarder>();
@@ -76,11 +81,16 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await _db.Events.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
 
     private static async Task WaitForStatusAsync(
-        Func<Task<WebhookEvent?>> fetch, EventStatus status, int timeoutMs = 5000)
+        ReplayWorker worker, Func<Task<WebhookEvent?>> fetch, EventStatus status, int timeoutMs = 5000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (true)
         {
+            // A faulted worker stops draining the queue; surface its exception
+            // instead of waiting out the timeout.
+            if (worker.ExecuteTask is { IsFaulted: true } faulted)
+                await faulted;
+
             var updated = await fetch();
             if (updated?.Status == status) return;
             if (DateTime.UtcNow >= deadline)
@@ -103,7 +113,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await queue.EnqueueAsync(Guid.NewGuid()); // unknown — no DB row
         await queue.EnqueueAsync(sentinel.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(sentinel.Id), EventStatus.Forwarded);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(sentinel.Id), EventStatus.Forwarded);
         await worker.StopAsync(CancellationToken.None);
 
         // Only the sentinel caused an HTTP call; the unknown ID was skipped without one.
@@ -120,7 +130,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await worker.StartAsync(CancellationToken.None);
         await queue.EnqueueAsync(evt.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
         await worker.StopAsync(CancellationToken.None);
 
         var updated = await FreshFetchAsync(evt.Id);
@@ -145,7 +155,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await worker.StartAsync(CancellationToken.None);
         await queue.EnqueueAsync(evt.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
         await worker.StopAsync(CancellationToken.None);
 
         var updated = await FreshFetchAsync(evt.Id);
@@ -165,7 +175,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await worker.StartAsync(CancellationToken.None);
         await queue.EnqueueAsync(evt.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
         await worker.StopAsync(CancellationToken.None);
 
         var updated = await FreshFetchAsync(evt.Id);
@@ -185,7 +195,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await worker.StartAsync(CancellationToken.None);
         await queue.EnqueueAsync(evt.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
         await worker.StopAsync(CancellationToken.None);
 
         var updated = await FreshFetchAsync(evt.Id);
@@ -249,7 +259,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await worker.StartAsync(CancellationToken.None);
         await queue.EnqueueAsync(evt.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(evt.Id), EventStatus.Forwarded);
         await worker.StopAsync(CancellationToken.None);
         listener.Dispose();
 
@@ -267,7 +277,7 @@ public sealed class ReplayWorkerTests : IAsyncDisposable
         await worker.StartAsync(CancellationToken.None);
         await queue.EnqueueAsync(evt.Id);
 
-        await WaitForStatusAsync(() => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
+        await WaitForStatusAsync(worker, () => FreshFetchAsync(evt.Id), EventStatus.ReplayFailed);
         await worker.StopAsync(CancellationToken.None);
 
         var updated = await FreshFetchAsync(evt.Id);
